@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react"
 
+const API_BASE = import.meta.env.VITE_API_URL || ""
+
 function App() {
   const [inventory, setInventory] = useState([])
   const [store, setStore] = useState("")
@@ -9,7 +11,7 @@ function App() {
   const [reorderSuccess, setReorderSuccess] = useState(null)
 
   useEffect(() => {
-    fetch("/api/inventory")
+    fetch(`${API_BASE}/api/inventory`)
       .then(res => res.json())
       .then(data => {
         setInventory(data.products)
@@ -21,7 +23,7 @@ function App() {
   const handleReorder = async (product) => {
     setReordering(product.id)
     try {
-      const res = await fetch(`/api/reorder/${product.id}`, {
+      const res = await fetch(`${API_BASE}/api/reorder/${product.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       })
