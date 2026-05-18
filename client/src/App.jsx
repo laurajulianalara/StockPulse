@@ -67,15 +67,20 @@ function App() {
   }
 
   const handleGlobalToggle = () => {
-    setSettings(prev => {
-      const newValue = !prev.auto_reorder_enabled
-      const updatedProducts = {}
-      Object.keys(prev.products).forEach(sku => {
-        updatedProducts[sku] = { ...prev.products[sku], auto_send: newValue }
-      })
-      return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
+  setSettings(prev => {
+    const newValue = !prev.auto_reorder_enabled
+    const updatedProducts = {}
+    Object.keys(prev.products).forEach(sku => {
+      const product = inventory.find(p => p.sku === sku)
+      const isLowOrCritical = product && (product.status === "low" || product.status === "critical")
+      updatedProducts[sku] = {
+        ...prev.products[sku],
+        auto_send: isLowOrCritical ? newValue : prev.products[sku].auto_send
+      }
     })
-  }
+    return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
+    })
+  } 
 
   const handleSaveSettings = async () => {
     setSavingSettings(true)
