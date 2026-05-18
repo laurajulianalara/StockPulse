@@ -1,0 +1,17 @@
+cat > /workspaces/StockPulse/.gitignore << 'EOF'
+# Environment
+.env
+*.env
+
+# Python
+api/venv/
+__pycache__/
+*.pyc
+
+# Node
+client/node_modules/
+client/dist/
+
+# OS
+.DS_Store
+EOF
