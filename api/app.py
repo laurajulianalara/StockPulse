@@ -36,7 +36,7 @@ last_known_qty = {}
 SETTINGS_FILE = Path(__file__).parent / "reorder_settings.json"
 
 DEFAULT_SETTINGS = {
-    "auto_reorder_enabled": False,
+    "auto_reorder_enabled": True,
     "products": {
         "LTP-001": { "threshold": 10, "reorder_qty": 50, "supplier_name": "Casa Linen Co.", "supplier_email": "orders@casalinen.com", "lead_time": "5 days", "auto_send": True },
         "CVS-002": { "threshold": 15, "reorder_qty": 30, "supplier_name": "ArtCraft Supply", "supplier_email": "po@artcraftsupply.com", "lead_time": "7 days", "auto_send": True },
