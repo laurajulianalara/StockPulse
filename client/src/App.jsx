@@ -49,17 +49,41 @@ function App() {
   const low = inventory.filter(p => p.status === "low").length
   const ok = inventory.filter(p => p.status === "ok").length
 
+  const gradientBg = `
+    radial-gradient(ellipse at 25% 25%, rgba(224,247,250,0.75) 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 75%, rgba(128,222,234,0.6) 0%, transparent 50%),
+    radial-gradient(ellipse at 60% 20%, rgba(178,235,242,0.55) 0%, transparent 45%),
+    radial-gradient(ellipse at 15% 80%, rgba(55,80,100,0.5) 0%, transparent 45%),
+    #1e2e38
+  `
+
+  const grainStyle1 = {
+    position: "fixed", inset: 0,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+    backgroundSize: "180px", opacity: 0.9, mixBlendMode: "overlay", pointerEvents: "none", zIndex: 0
+  }
+
+  const grainStyle2 = {
+    position: "fixed", inset: 0,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n2'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n2)'/%3E%3C/svg%3E")`,
+    backgroundSize: "120px", opacity: 0.55, mixBlendMode: "soft-light", pointerEvents: "none", zIndex: 0
+  }
+
   if (loading) return (
-    <div style={{ minHeight: "100vh", background: "#151f2e", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ minHeight: "100vh", background: gradientBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ color: "rgba(255,255,255,0.4)", letterSpacing: "4px", fontSize: 12, textTransform: "uppercase" }}>Loading inventory...</div>
     </div>
   )
 
   return (
-    <div style={{ minHeight: "100vh", background: "#151f2e", fontFamily: "sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: gradientBg, fontFamily: "sans-serif", position: "relative" }}>
+
+      {/* Grain layers */}
+      <div style={grainStyle1}></div>
+      <div style={grainStyle2}></div>
 
       {/* Header */}
-      <div style={{ borderBottom: "0.5px solid rgba(255,255,255,0.08)", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#151f2e" }}>
+      <div style={{ borderBottom: "0.5px solid rgba(255,255,255,0.08)", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 2 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 36, height: 36, borderRadius: 9, border: "0.5px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <svg width="20" height="20" viewBox="0 0 64 64"><polyline points="8,32 16,32 20,18 25,46 30,24 35,38 39,28 44,32 56,32" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -73,7 +97,7 @@ function App() {
         </div>
       </div>
 
-      <div style={{ padding: "32px 40px" }}>
+      <div style={{ padding: "32px 40px", position: "relative", zIndex: 2 }}>
 
         {/* Summary cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 32 }}>
@@ -82,7 +106,7 @@ function App() {
             { label: "Low Stock", count: low, color: "#f97316", desc: "Below threshold" },
             { label: "In Stock", count: ok, color: "#22c55e", desc: "Healthy inventory" }
           ].map(s => (
-            <div key={s.label} style={{ background: "#1c2a3a", border: `0.5px solid ${s.color}30`, borderRadius: 14, padding: "20px 24px" }}>
+            <div key={s.label} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${s.color}30`, borderRadius: 14, padding: "20px 24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
                 <div>
                   <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, letterSpacing: 3, textTransform: "uppercase", marginBottom: 8 }}>{s.label}</div>
@@ -107,7 +131,7 @@ function App() {
         {/* Product grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
           {filtered.map(product => (
-            <div key={product.id} style={{ background: "#1c2a3a", border: `0.5px solid ${product.status === "ok" ? "rgba(255,255,255,0.08)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22 }}>
+            <div key={product.id} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${product.status === "ok" ? "rgba(255,255,255,0.1)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22 }}>
 
               {/* Product header */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
