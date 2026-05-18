@@ -66,6 +66,17 @@ function App() {
     }
   }
 
+  const handleGlobalToggle = () => {
+    setSettings(prev => {
+      const newValue = !prev.auto_reorder_enabled
+      const updatedProducts = {}
+      Object.keys(prev.products).forEach(sku => {
+        updatedProducts[sku] = { ...prev.products[sku], auto_send: newValue }
+      })
+      return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
+    })
+  }
+
   const handleSaveSettings = async () => {
     setSavingSettings(true)
     await fetch(`${API_BASE}/api/settings`, {
@@ -298,7 +309,7 @@ function App() {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div onClick={() => setSettings(prev => ({ ...prev, auto_reorder_enabled: !prev.auto_reorder_enabled }))}
+                      <div onClick={handleGlobalToggle}
                         style={{ width: 42, height: 24, borderRadius: 100, background: settings.auto_reorder_enabled ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.08)", border: `0.5px solid ${settings.auto_reorder_enabled ? "rgba(249,115,22,0.5)" : "rgba(255,255,255,0.12)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
                         <div style={{ position: "absolute", width: 16, height: 16, borderRadius: "50%", background: settings.auto_reorder_enabled ? "#f97316" : "rgba(255,255,255,0.4)", top: 3, left: settings.auto_reorder_enabled ? 22 : 4, transition: "all 0.3s" }}></div>
                       </div>
