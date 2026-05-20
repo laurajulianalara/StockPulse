@@ -156,7 +156,7 @@ Simulated Sales Data (last 30 days):
 Write a concise 2-sentence forecast. Include how many days until stockout and a specific recommended reorder quantity to cover 45 days of demand. Be direct and urgent where appropriate. Do not use bullet points."""
 
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=150,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -195,7 +195,7 @@ Respond ONLY with valid JSON, no markdown, no explanation outside the JSON:
 {{"total_qty": 45, "per_warehouse": {json.dumps({k: 15 for k in location_names})}, "reasoning": "One sentence explanation"}}"""
 
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=250,
             messages=[{"role": "user", "content": prompt}]
         )
