@@ -37,14 +37,15 @@ SETTINGS_FILE = Path(__file__).parent / "reorder_settings.json"
 
 DEFAULT_SETTINGS = {
     "auto_reorder_enabled": True,
+    "global_reorder_qty": 0,
     "products": {
         "LTP-001": { "threshold": 10, "reorder_qty": 50, "supplier_name": "Casa Linen Co.", "supplier_email": "orders@casalinen.com", "lead_time": "5 days", "auto_send": True },
-        "CVS-002": { "threshold": 15, "reorder_qty": 30, "supplier_name": "ArtCraft Supply", "supplier_email": "po@artcraftsupply.com", "lead_time": "7 days", "auto_send": True },
-        "BPF-003": { "threshold": 10, "reorder_qty": 40, "supplier_name": "EcoFrame Ltd.", "supplier_email": "sales@ecoframe.com", "lead_time": "4 days", "auto_send": False },
+        "CVS-002": { "threshold": 15, "reorder_qty": 30, "supplier_name": "ArtCraft Supply", "supplier_email": "po@artcraftsupply.com", "lead_time": "7 days", "auto_send": False },
+        "BPF-003": { "threshold": 10, "reorder_qty": 40, "supplier_name": "EcoFrame Ltd.", "supplier_email": "sales@ecoframe.com", "lead_time": "4 days", "auto_send": True },
         "WSB-004": { "threshold": 5, "reorder_qty": 25, "supplier_name": "Weave & Co.", "supplier_email": "orders@weaveandco.com", "lead_time": "6 days", "auto_send": True },
         "MCS-005": { "threshold": 10, "reorder_qty": 20, "supplier_name": "Stone & Style", "supplier_email": "po@stoneandstyle.com", "lead_time": "8 days", "auto_send": False },
         "LTR-006": { "threshold": 8, "reorder_qty": 35, "supplier_name": "Casa Linen Co.", "supplier_email": "orders@casalinen.com", "lead_time": "5 days", "auto_send": True },
-        "RWM-007": { "threshold": 10, "reorder_qty": 15, "supplier_name": "Rattan Works", "supplier_email": "supply@rattanworks.com", "lead_time": "10 days", "auto_send": False },
+        "RWM-007": { "threshold": 10, "reorder_qty": 15, "supplier_name": "Rattan Works", "supplier_email": "supply@rattanworks.com", "lead_time": "10 days", "auto_send": True },
         "SCS-008": { "threshold": 8, "reorder_qty": 45, "supplier_name": "Pure Wick Co.", "supplier_email": "orders@purewick.com", "lead_time": "3 days", "auto_send": True }
     }
 }
@@ -278,8 +279,7 @@ def send_reorder_alert(product):
 
 def fetch_inventory():
     try:
-        products_url = f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json"
-        products_data = requests.get(products_url, headers=HEADERS).json()
+        products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json", headers=HEADERS).json()
         locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
         settings = load_settings()
@@ -289,34 +289,25 @@ def fetch_inventory():
                 sku = variant["sku"]
                 product_settings = settings["products"].get(sku, {})
                 threshold = product_settings.get("threshold", 10)
-
                 inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
-
                 location_breakdown = []
                 total_inventory = 0
                 for level in inv_data.get("inventory_levels", []):
                     qty = level["available"] or 0
                     total_inventory += qty
                     location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
-
                 product_data = {
-                    "id": product["id"],
-                    "title": product["title"],
-                    "sku": sku,
-                    "inventory": total_inventory,
-                    "threshold": threshold,
+                    "id": product["id"], "title": product["title"], "sku": sku,
+                    "inventory": total_inventory, "threshold": threshold,
                     "status": get_status(total_inventory, threshold),
                     "locations": location_breakdown
                 }
-
                 prev_qty = last_known_qty.get(sku)
                 if total_inventory < LOW_STOCK_TRIGGER:
                     if prev_qty is not None and total_inventory < prev_qty:
                         print(f"[StockPulse] Alert: {product['title']} dropped to {total_inventory} units")
                         send_low_stock_alert(product_data)
-
                 last_known_qty[sku] = total_inventory
-
     except Exception as e:
         print(f"[StockPulse] Polling error: {e}")
 
@@ -337,7 +328,6 @@ def get_inventory():
     locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
     settings = load_settings()
     results = []
-
     for product in products_data["products"]:
         for variant in product["variants"]:
             sku = variant["sku"]
@@ -350,15 +340,11 @@ def get_inventory():
                 total_inventory += qty
                 location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
             results.append({
-                "id": product["id"],
-                "title": product["title"],
-                "sku": sku,
-                "inventory": total_inventory,
-                "threshold": threshold,
+                "id": product["id"], "title": product["title"], "sku": sku,
+                "inventory": total_inventory, "threshold": threshold,
                 "status": get_status(total_inventory, threshold),
                 "locations": location_breakdown
             })
-
     return jsonify({"store": "Harlow & Co.", "products": results})
 
 @app.route("/api/settings", methods=["GET"])
@@ -373,10 +359,10 @@ def update_settings():
 
 @app.route("/api/reorder/<int:product_id>", methods=["POST"])
 def trigger_reorder(product_id):
+    settings = load_settings()
     product_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products/{product_id}.json", headers=HEADERS).json()["product"]
     variant = product_data["variants"][0]
     sku = variant["sku"]
-    settings = load_settings()
     threshold = settings["products"].get(sku, {}).get("threshold", 10)
     locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
     locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
@@ -388,11 +374,8 @@ def trigger_reorder(product_id):
         total_inventory += qty
         location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
     product_payload = {
-        "id": product_data["id"],
-        "title": product_data["title"],
-        "sku": sku,
-        "inventory": total_inventory,
-        "threshold": threshold,
+        "id": product_data["id"], "title": product_data["title"], "sku": sku,
+        "inventory": total_inventory, "threshold": threshold,
         "status": get_status(total_inventory, threshold),
         "locations": location_breakdown
     }
@@ -410,26 +393,16 @@ def send_purchase_order(product_id):
     supplier_name = product_settings.get("supplier_name", "Supplier")
     reorder_qty = product_settings.get("reorder_qty", 20)
     lead_time = product_settings.get("lead_time", "5-7 days")
-
     if not supplier_email:
         return jsonify({"success": False, "message": "No supplier email configured"}), 400
-
     po_html = build_po_email(product_data["title"], sku, reorder_qty, supplier_name, lead_time)
-
-    # Send to internal team
-    send_email(
-        subject=f"📋 PO Sent — {product_data['title']} ({reorder_qty} units) to {supplier_name}",
-        html_content=po_html
-    )
-
-    # Send to supplier
+    send_email(subject=f"📋 PO Sent — {product_data['title']} ({reorder_qty} units) to {supplier_name}", html_content=po_html)
     try:
         msg = Mail(from_email=SENDGRID_FROM_EMAIL, to_emails=supplier_email, subject=f"PO Request from Harlow & Co. — {product_data['title']} ({reorder_qty} units)", html_content=po_html)
         SendGridAPIClient(SENDGRID_API_KEY).send(msg)
         print(f"[StockPulse] PO sent to supplier: {supplier_email}")
     except Exception as e:
         print(f"[StockPulse] PO supplier email error: {e}")
-
     return jsonify({"success": True, "message": f"PO sent to {supplier_name} for {reorder_qty} units of {product_data['title']}", "reorder_qty": reorder_qty, "supplier_name": supplier_name, "supplier_email": supplier_email})
 
 if __name__ == "__main__":
