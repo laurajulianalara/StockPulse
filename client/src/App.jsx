@@ -166,11 +166,12 @@ function App() {
       const newValue = !prev.auto_reorder_enabled
       const updatedProducts = {}
       Object.keys(prev.products).forEach(sku => {
-        const product = inventory.find(p => p.sku === sku)
-        const isLowOrCritical = product && (product.status === "low" || product.status === "critical")
+        const match = inventory.find(p => p.sku === sku)
+        const status = match ? match.status : null
+        const isActionable = status === "low" || status === "critical"
         updatedProducts[sku] = {
           ...prev.products[sku],
-          auto_send: isLowOrCritical ? newValue : false
+          auto_send: isActionable ? newValue : false
         }
       })
       return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
@@ -483,8 +484,6 @@ function App() {
                                 <td style={{ padding: "12px" }}>
                                   <input value={ps.lead_time || ""} onChange={e => updateProductSetting(product.sku, "lead_time", e.target.value)} style={{ width: 70, background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "5px 8px", color: "rgba(255,255,255,0.7)", fontSize: 11, outline: "none" }} />
                                 </td>
-
-                                {/* Auto-Send toggle — only for critical and low */}
                                 <td style={{ padding: "12px" }}>
                                   {isActionable ? (
                                     <div onClick={() => updateProductSetting(product.sku, "auto_send", !ps.auto_send)}
@@ -492,18 +491,16 @@ function App() {
                                       <div style={{ position: "absolute", width: 14, height: 14, borderRadius: "50%", background: ps.auto_send ? "#f97316" : "rgba(255,255,255,0.35)", top: 2.5, left: ps.auto_send ? 18 : 3, transition: "all 0.3s" }}></div>
                                     </div>
                                   ) : (
-                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", letterSpacing: 1 }}>—</span>
+                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)" }}>—</span>
                                   )}
                                 </td>
-
-                                {/* Trigger Reorder button — only for critical and low */}
                                 <td style={{ padding: "12px" }}>
                                   {isActionable ? (
                                     <button onClick={() => setModalProduct(product)} style={{ background: statusColor(product.status) + "25", border: `1px solid ${statusColor(product.status)}60`, borderRadius: 7, padding: "7px 12px", color: statusColor(product.status), fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
                                       ⚡ Reorder
                                     </button>
                                   ) : (
-                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", letterSpacing: 1 }}>—</span>
+                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)" }}>—</span>
                                   )}
                                 </td>
                               </tr>
