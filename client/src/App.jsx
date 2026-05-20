@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 
 const API_BASE = import.meta.env.VITE_API_URL || ""
-const ADMIN_PASSWORD = "stockpulse2026"
+const ADMIN_PASSWORD = "0000"
 
 const gradientBg = `
   radial-gradient(ellipse at 20% 20%, rgba(100,180,200,0.25) 0%, transparent 50%),
@@ -215,11 +215,9 @@ function App() {
               ))}
             </div>
 
-            {/* Product grid — visibility only */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
               {filtered.map(product => (
                 <div key={product.id} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${product.status === "ok" ? "rgba(255,255,255,0.1)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22, minHeight: 320 }}>
-
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
                     <div>
                       <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{product.title}</div>
@@ -229,7 +227,6 @@ function App() {
                       {product.status}
                     </span>
                   </div>
-
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", marginBottom: 18 }}>
                     <div>
                       <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Stock</div>
@@ -240,7 +237,6 @@ function App() {
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 20 }}>{product.threshold}</div>
                     </div>
                   </div>
-
                   <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
                     <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>By Location</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -257,7 +253,6 @@ function App() {
                       ))}
                     </div>
                   </div>
-
                 </div>
               ))}
             </div>
@@ -269,12 +264,19 @@ function App() {
           <>
             {!authenticated ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-                <div style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "40px 48px", textAlign: "center", maxWidth: 360 }}>
+                <div style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 16, padding: "40px 48px", textAlign: "center", maxWidth: 380 }}>
                   <div style={{ width: 48, height: 48, borderRadius: 12, border: "0.5px solid rgba(255,255,255,0.15)", background: "rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Admin Access Required</div>
-                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginBottom: 24 }}>Enter your admin password to access Reorder Rules</div>
+                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginBottom: 20 }}>Enter your admin password to access Reorder Rules</div>
+
+                  {/* Demo password hint */}
+                  <div style={{ background: "rgba(100,180,200,0.12)", border: "0.5px solid rgba(100,180,200,0.35)", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
+                    <div style={{ fontSize: 9, color: "rgba(100,180,200,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Demo Access</div>
+                    <div style={{ fontSize: 13, color: "rgba(100,180,200,0.9)", fontWeight: 500, letterSpacing: 6 }}>0000</div>
+                  </div>
+
                   <input
                     type="password"
                     placeholder="Enter password"
@@ -371,14 +373,46 @@ function App() {
                                 </td>
                                 <td style={{ padding: "12px" }}>
                                   {product.status !== "ok" && (
-                                    <button onClick={() => handleReorder(product)} disabled={reordering === product.id} style={{ background: reorderSuccess === product.id ? "rgba(34,197,94,0.12)" : statusColor(product.status) + "12", border: `0.5px solid ${reorderSuccess === product.id ? "rgba(34,197,94,0.3)" : statusColor(product.status) + "30"}`, borderRadius: 7, padding: "5px 10px", color: reorderSuccess === product.id ? "#22c55e" : statusColor(product.status), fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                      {reordering === product.id ? "Sending..." : reorderSuccess === product.id ? "✓ Sent!" : "Trigger"}
+                                    <button
+                                      onClick={() => handleReorder(product)}
+                                      disabled={reordering === product.id}
+                                      style={{
+                                        background: reorderSuccess === product.id ? "rgba(34,197,94,0.2)" : statusColor(product.status) + "25",
+                                        border: `1px solid ${reorderSuccess === product.id ? "rgba(34,197,94,0.5)" : statusColor(product.status) + "60"}`,
+                                        borderRadius: 7,
+                                        padding: "7px 12px",
+                                        color: reorderSuccess === product.id ? "#22c55e" : statusColor(product.status),
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        letterSpacing: 1.5,
+                                        textTransform: "uppercase",
+                                        cursor: reordering === product.id ? "not-allowed" : "pointer",
+                                        whiteSpace: "nowrap",
+                                        transition: "all 0.3s"
+                                      }}>
+                                      {reordering === product.id ? "⏳ Sending..." : reorderSuccess === product.id ? "✅ Sent!" : "⚡ Reorder"}
                                     </button>
                                   )}
                                 </td>
                                 <td style={{ padding: "12px" }}>
-                                  <button onClick={() => handleSendPO(product)} disabled={sendingPO === product.id} style={{ background: poSuccess === product.id ? "rgba(34,197,94,0.12)" : "rgba(99,102,241,0.12)", border: `0.5px solid ${poSuccess === product.id ? "rgba(34,197,94,0.3)" : "rgba(99,102,241,0.25)"}`, borderRadius: 7, padding: "5px 10px", color: poSuccess === product.id ? "#22c55e" : "#818cf8", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                    {sendingPO === product.id ? "Sending..." : poSuccess === product.id ? "✓ Sent!" : "Send PO"}
+                                  <button
+                                    onClick={() => handleSendPO(product)}
+                                    disabled={sendingPO === product.id}
+                                    style={{
+                                      background: poSuccess === product.id ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)",
+                                      border: `1px solid ${poSuccess === product.id ? "rgba(34,197,94,0.5)" : "rgba(99,102,241,0.45)"}`,
+                                      borderRadius: 7,
+                                      padding: "7px 12px",
+                                      color: poSuccess === product.id ? "#22c55e" : "#818cf8",
+                                      fontSize: 10,
+                                      fontWeight: 700,
+                                      letterSpacing: 1.5,
+                                      textTransform: "uppercase",
+                                      cursor: "pointer",
+                                      whiteSpace: "nowrap",
+                                      transition: "all 0.3s"
+                                    }}>
+                                    {sendingPO === product.id ? "⏳ Sending..." : poSuccess === product.id ? "✅ Sent!" : "📋 Send PO"}
                                   </button>
                                 </td>
                               </tr>
