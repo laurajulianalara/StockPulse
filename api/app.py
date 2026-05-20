@@ -87,7 +87,9 @@ def get_status(inventory, threshold):
     return "ok"
 
 def get_ai_forecast(product):
+    print(f"[StockPulse] Getting AI forecast for {product['title']}, API key present: {bool(ANTHROPIC_API_KEY)}")
     if not ANTHROPIC_API_KEY:
+        print("[StockPulse] No Anthropic API key found")
         return None
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -107,9 +109,52 @@ Based on this inventory data, provide a brief 1-2 sentence forecast and recommen
             max_tokens=150,
             messages=[{"role": "user", "content": prompt}]
         )
-        return message.content[0].text
+        forecast = message.content[0].text
+        print(f"[StockPulse] AI forecast generated: {forecast[:50]}...")
+        return forecast
     except Exception as e:
-        print(f"[StockPulse] AI forecast error: {e}")
+        print(f"[StockPulse] AI forecast error: {type(e).__name__}: {e}")
+        return None
+
+def get_ai_qty_recommendation(product, settings):
+    print(f"[StockPulse] Getting AI qty recommendation for {product['title']}")
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        ps = settings.get("products", {}).get(product["sku"], {})
+        lead_time = ps.get("lead_time", "5-7 days")
+        location_text = ", ".join([f"{loc['location']}: {loc['quantity']} units" for loc in product["locations"]])
+        num_locations = len(product["locations"])
+
+        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home décor retailer.
+
+Product: {product['title']} (SKU: {product['sku']})
+Current Total Stock: {product['inventory']} units
+Reorder Threshold: {product['threshold']} units
+Status: {product['status'].upper()}
+Stock by Location: {location_text}
+Number of Warehouses: {num_locations}
+Supplier Lead Time: {lead_time}
+
+Recommend a reorder quantity per warehouse. Assume average daily sales of 2-3 units total across all warehouses for this product category. Aim to cover 45 days of demand plus safety stock.
+
+Respond ONLY with a JSON object in this exact format, no other text:
+{{"total_qty": 45, "per_warehouse": {{"Miami Warehouse — HQ": 15, "Atlanta Fulfillment Center": 15, "Dallas Distribution Hub": 15}}, "reasoning": "One sentence explanation"}}
+
+Use the exact location names from the data."""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = message.content[0].text.strip()
+        print(f"[StockPulse] AI qty raw response: {raw}")
+        data = json.loads(raw)
+        return data
+    except Exception as e:
+        print(f"[StockPulse] AI qty recommendation error: {type(e).__name__}: {e}")
         return None
 
 def send_email(subject, html_content):
@@ -150,7 +195,6 @@ def build_low_stock_email(product, forecast=None):
                 <div style="font-size:13px;color:rgba(255,255,255,0.75);line-height:1.6;">{forecast}</div>
             </div>
         </td></tr>"""
-
     return f"""
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);">
         <table width="100%" cellpadding="0" cellspacing="0">
@@ -259,7 +303,7 @@ def send_low_stock_alert(product):
     ]
     if forecast:
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*⚡ AI Forecast:*\n{forecast}"}})
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}})
     message = {"attachments": [{"color": color, "blocks": blocks}]}
     requests.post(SLACK_LOW_STOCK_WEBHOOK, json=message)
     send_email(
@@ -385,6 +429,36 @@ def get_forecast(product_id):
         forecast = get_ai_forecast(product_payload)
         return jsonify({"success": True, "forecast": forecast, "product": product_payload})
     except Exception as e:
+        print(f"[StockPulse] Forecast endpoint error: {type(e).__name__}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/forecast-qty/<int:product_id>", methods=["GET"])
+def get_forecast_qty(product_id):
+    try:
+        product_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products/{product_id}.json", headers=HEADERS).json()["product"]
+        variant = product_data["variants"][0]
+        sku = variant["sku"]
+        settings = load_settings()
+        threshold = settings["products"].get(sku, {}).get("threshold", 10)
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
+        inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
+        location_breakdown = []
+        total_inventory = 0
+        for level in inv_data.get("inventory_levels", []):
+            qty = level["available"] or 0
+            total_inventory += qty
+            location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
+        product_payload = {
+            "id": product_data["id"], "title": product_data["title"], "sku": sku,
+            "inventory": total_inventory, "threshold": threshold,
+            "status": get_status(total_inventory, threshold),
+            "locations": location_breakdown
+        }
+        recommendation = get_ai_qty_recommendation(product_payload, settings)
+        return jsonify({"success": True, "recommendation": recommendation})
+    except Exception as e:
+        print(f"[StockPulse] Forecast qty endpoint error: {type(e).__name__}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/history", methods=["GET"])
