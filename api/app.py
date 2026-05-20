@@ -3,12 +3,14 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+import anthropic
 import requests
 import os
 import threading
 import time
 import json
 from pathlib import Path
+from datetime import datetime
 
 load_dotenv()
 
@@ -22,6 +24,7 @@ SLACK_REORDER_WEBHOOK = os.getenv("SLACK_REORDER_WEBHOOK")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL")
 SENDGRID_TO_EMAILS = os.getenv("SENDGRID_TO_EMAILS", "").split(",")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 API_VERSION = "2025-01"
 
 HEADERS = {
@@ -34,6 +37,7 @@ POLL_INTERVAL = 15
 last_known_qty = {}
 
 SETTINGS_FILE = Path(__file__).parent / "reorder_settings.json"
+HISTORY_FILE = Path(__file__).parent / "reorder_history.json"
 
 DEFAULT_SETTINGS = {
     "auto_reorder_enabled": True,
@@ -60,6 +64,19 @@ def save_settings_to_file(settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=2)
 
+def load_history():
+    if HISTORY_FILE.exists():
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_history(entry):
+    history = load_history()
+    history.insert(0, entry)
+    history = history[:100]
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=2)
+
 def get_status(inventory, threshold):
     if inventory == 0:
         return "critical"
@@ -68,6 +85,32 @@ def get_status(inventory, threshold):
     elif inventory <= threshold:
         return "low"
     return "ok"
+
+def get_ai_forecast(product):
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        location_text = ", ".join([f"{loc['location']}: {loc['quantity']} units" for loc in product["locations"]])
+        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home décor retailer.
+
+Product: {product['title']} (SKU: {product['sku']})
+Current Total Stock: {product['inventory']} units
+Reorder Threshold: {product['threshold']} units
+Status: {product['status'].upper()}
+Stock by Location: {location_text}
+
+Based on this inventory data, provide a brief 1-2 sentence forecast and recommendation. Be specific about urgency, estimated days until stockout (assume average daily sales of 2-3 units for this product category), and recommended reorder quantity. Keep it concise and actionable. Do not use bullet points."""
+
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return message.content[0].text
+    except Exception as e:
+        print(f"[StockPulse] AI forecast error: {e}")
+        return None
 
 def send_email(subject, html_content):
     if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
@@ -89,7 +132,7 @@ def send_email(subject, html_content):
     except Exception as e:
         print(f"[StockPulse] Email error: {e}")
 
-def build_low_stock_email(product):
+def build_low_stock_email(product, forecast=None):
     status = product["status"]
     color = "#ef4444" if status == "critical" else "#f97316"
     emoji = "🔴" if status == "critical" else "🟡"
@@ -98,6 +141,16 @@ def build_low_stock_email(product):
         f"<tr><td style='padding:8px 0;color:rgba(255,255,255,0.45);font-size:12px;'>{loc['location']}</td><td style='padding:8px 0;text-align:right;'><span style='font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);'>{loc['quantity']}</span></td></tr>"
         for loc in product["locations"]
     ])
+    ai_section = ""
+    if forecast:
+        ai_section = f"""
+        <tr><td style="padding:0 28px 20px;">
+            <div style="background:rgba(100,200,220,0.08);border:0.5px solid rgba(100,200,220,0.2);border-radius:10px;padding:14px 16px;">
+                <div style="font-size:8px;color:rgba(100,200,220,0.6);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">⚡ AI Forecast</div>
+                <div style="font-size:13px;color:rgba(255,255,255,0.75);line-height:1.6;">{forecast}</div>
+            </div>
+        </td></tr>"""
+
     return f"""
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);">
         <table width="100%" cellpadding="0" cellspacing="0">
@@ -128,6 +181,7 @@ def build_low_stock_email(product):
                 <div style="font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">By Location</div>
                 <table width="100%" cellpadding="0" cellspacing="0">{location_rows}</table>
             </td></tr>
+            {ai_section}
             <tr><td style="padding:0 28px 28px;">
                 <div style="background:{color}12;border:0.5px solid {color}30;border-radius:10px;padding:14px;text-align:center;">
                     <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:{color};">Log into StockPulse to trigger a reorder</span>
@@ -185,73 +239,32 @@ def build_reorder_email(product):
         </table>
     </div>"""
 
-def build_po_email(product_title, sku, reorder_qty, supplier_name, lead_time):
-    return f"""
-    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:18px 28px;border-bottom:0.5px solid rgba(255,255,255,0.06);">
-                <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                    <td style="font-size:10px;font-weight:100;color:rgba(255,255,255,0.55);letter-spacing:4px;text-transform:uppercase;">StockPulse</td>
-                    <td style="text-align:right;font-size:9px;color:rgba(255,255,255,0.22);letter-spacing:2px;text-transform:uppercase;">Purchase Order</td>
-                </tr></table>
-            </td></tr>
-            <tr><td style="padding:32px 28px 24px;text-align:center;">
-                <div style="font-size:40px;margin-bottom:12px;">📋</div>
-                <div style="font-size:22px;font-weight:500;color:rgba(255,255,255,0.92);margin-bottom:6px;">Purchase Order Request</div>
-                <div style="font-size:12px;color:rgba(255,255,255,0.32);letter-spacing:1px;">From Harlow &amp; Co. &middot; {sku}</div>
-            </td></tr>
-            <tr><td style="padding:0 28px 20px;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;">
-                    <tr><td style="padding:10px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);"><span style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:2px;text-transform:uppercase;">Order Details</span></td></tr>
-                    <tr><td><table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                            <td width="40%" style="padding:14px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Product</div><div style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.85);">{product_title}</div></td>
-                            <td width="20%" style="padding:14px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">SKU</div><div style="font-size:13px;font-weight:500;color:rgba(255,255,255,0.5);">{sku}</div></td>
-                            <td width="20%" style="padding:14px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Qty</div><div style="font-size:22px;font-weight:500;color:#818cf8;">{reorder_qty}</div></td>
-                            <td width="20%" style="padding:14px;"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Lead Time</div><div style="font-size:13px;color:rgba(255,255,255,0.5);">{lead_time}</div></td>
-                        </tr>
-                    </table></td></tr>
-                    <tr><td style="padding:14px;border-top:0.5px solid rgba(255,255,255,0.06);">
-                        <div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Supplier</div>
-                        <div style="font-size:13px;color:rgba(255,255,255,0.6);">{supplier_name}</div>
-                    </td></tr>
-                </table>
-            </td></tr>
-            <tr><td style="padding:0 28px 28px;">
-                <div style="background:rgba(99,102,241,0.08);border:0.5px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;text-align:center;">
-                    <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#818cf8;">Please confirm receipt and expected ship date</span>
-                </div>
-            </td></tr>
-            <tr><td style="padding:14px 28px;border-top:0.5px solid rgba(255,255,255,0.05);text-align:center;">
-                <span style="font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:1.5px;text-transform:uppercase;">StockPulse &middot; Harlow &amp; Co. &middot; Automated PO System</span>
-            </td></tr>
-        </table>
-    </div>"""
-
 def send_low_stock_alert(product):
     if not SLACK_LOW_STOCK_WEBHOOK:
         return
+    forecast = get_ai_forecast(product)
     status = product["status"]
     emoji = "🔴" if status == "critical" else "🟡"
     color = "#ef4444" if status == "critical" else "#f97316"
     location_text = "\n".join([f"• {loc['location']}: *{loc['quantity']} units*" for loc in product["locations"]])
-    message = {
-        "attachments": [{"color": color, "blocks": [
-            {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} Low Stock Alert -- {product['title']} dropped to {product['inventory']} units"}},
-            {"type": "section", "fields": [
-                {"type": "mrkdwn", "text": f"*Product:*\n{product['title']}"},
-                {"type": "mrkdwn", "text": f"*SKU:*\n{product['sku']}"},
-                {"type": "mrkdwn", "text": f"*Total Stock:*\n{product['inventory']} units"},
-                {"type": "mrkdwn", "text": f"*Threshold:*\n{product['threshold']} units"}
-            ]},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Inventory by Location:*\n{location_text}"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}}
-        ]}]
-    }
+    blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} Low Stock Alert -- {product['title']} dropped to {product['inventory']} units"}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*Product:*\n{product['title']}"},
+            {"type": "mrkdwn", "text": f"*SKU:*\n{product['sku']}"},
+            {"type": "mrkdwn", "text": f"*Total Stock:*\n{product['inventory']} units"},
+            {"type": "mrkdwn", "text": f"*Threshold:*\n{product['threshold']} units"}
+        ]},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Inventory by Location:*\n{location_text}"}},
+    ]
+    if forecast:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*⚡ AI Forecast:*\n{forecast}"}})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}})
+    message = {"attachments": [{"color": color, "blocks": blocks}]}
     requests.post(SLACK_LOW_STOCK_WEBHOOK, json=message)
     send_email(
         subject=f"🔴 StockPulse Alert — {product['title']} is {product['status'].upper()}",
-        html_content=build_low_stock_email(product)
+        html_content=build_low_stock_email(product, forecast)
     )
 
 def send_reorder_alert(product):
@@ -283,7 +296,6 @@ def fetch_inventory():
         locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
         settings = load_settings()
-
         for product in products_data["products"]:
             for variant in product["variants"]:
                 sku = variant["sku"]
@@ -347,6 +359,38 @@ def get_inventory():
             })
     return jsonify({"store": "Harlow & Co.", "products": results})
 
+@app.route("/api/forecast/<int:product_id>", methods=["GET"])
+def get_forecast(product_id):
+    try:
+        product_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products/{product_id}.json", headers=HEADERS).json()["product"]
+        variant = product_data["variants"][0]
+        sku = variant["sku"]
+        settings = load_settings()
+        threshold = settings["products"].get(sku, {}).get("threshold", 10)
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
+        inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
+        location_breakdown = []
+        total_inventory = 0
+        for level in inv_data.get("inventory_levels", []):
+            qty = level["available"] or 0
+            total_inventory += qty
+            location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
+        product_payload = {
+            "id": product_data["id"], "title": product_data["title"], "sku": sku,
+            "inventory": total_inventory, "threshold": threshold,
+            "status": get_status(total_inventory, threshold),
+            "locations": location_breakdown
+        }
+        forecast = get_ai_forecast(product_payload)
+        return jsonify({"success": True, "forecast": forecast, "product": product_payload})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    return jsonify(load_history())
+
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
     return jsonify(load_settings())
@@ -380,6 +424,19 @@ def trigger_reorder(product_id):
         "locations": location_breakdown
     }
     send_reorder_alert(product_payload)
+    body = request.get_json() or {}
+    save_history({
+        "id": product_data["id"],
+        "title": product_data["title"],
+        "sku": sku,
+        "inventory_at_reorder": total_inventory,
+        "total_qty_ordered": body.get("total_qty", settings["products"].get(sku, {}).get("reorder_qty", 0)),
+        "qty_per_warehouse": body.get("qty_per_warehouse", {}),
+        "supplier_name": settings["products"].get(sku, {}).get("supplier_name", ""),
+        "supplier_email": settings["products"].get(sku, {}).get("supplier_email", ""),
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status": get_status(total_inventory, threshold)
+    })
     return jsonify({"success": True, "message": f"Reorder triggered for {product_data['title']}. Slack and email alerts sent.", "product": product_payload})
 
 @app.route("/api/po/<int:product_id>", methods=["POST"])
@@ -395,15 +452,20 @@ def send_purchase_order(product_id):
     lead_time = product_settings.get("lead_time", "5-7 days")
     if not supplier_email:
         return jsonify({"success": False, "message": "No supplier email configured"}), 400
-    po_html = build_po_email(product_data["title"], sku, reorder_qty, supplier_name, lead_time)
-    send_email(subject=f"📋 PO Sent — {product_data['title']} ({reorder_qty} units) to {supplier_name}", html_content=po_html)
+    po_html = f"""<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;padding:28px;border:0.5px solid rgba(255,255,255,0.08);">
+        <p style="color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:3px;text-transform:uppercase;">StockPulse &middot; Purchase Order</p>
+        <h2 style="color:rgba(255,255,255,0.9);margin:12px 0;">PO Request — {product_data['title']}</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:13px;">SKU: {sku} &middot; Qty: {reorder_qty} units &middot; Lead Time: {lead_time}</p>
+        <p style="color:rgba(255,255,255,0.6);font-size:13px;">Supplier: {supplier_name}</p>
+        <p style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:20px;">Please confirm receipt and expected ship date. &mdash; Harlow &amp; Co. Operations</p>
+    </div>"""
+    send_email(subject=f"📋 PO Sent — {product_data['title']} ({reorder_qty} units)", html_content=po_html)
     try:
         msg = Mail(from_email=SENDGRID_FROM_EMAIL, to_emails=supplier_email, subject=f"PO Request from Harlow & Co. — {product_data['title']} ({reorder_qty} units)", html_content=po_html)
         SendGridAPIClient(SENDGRID_API_KEY).send(msg)
-        print(f"[StockPulse] PO sent to supplier: {supplier_email}")
     except Exception as e:
-        print(f"[StockPulse] PO supplier email error: {e}")
-    return jsonify({"success": True, "message": f"PO sent to {supplier_name} for {reorder_qty} units of {product_data['title']}", "reorder_qty": reorder_qty, "supplier_name": supplier_name, "supplier_email": supplier_email})
+        print(f"[StockPulse] PO error: {e}")
+    return jsonify({"success": True, "message": f"PO sent to {supplier_name}"})
 
 if __name__ == "__main__":
     poll_thread = threading.Thread(target=start_polling, daemon=True)

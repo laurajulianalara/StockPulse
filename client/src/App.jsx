@@ -133,6 +133,9 @@ function App() {
   const [modalProduct, setModalProduct] = useState(null)
   const [modalSending, setModalSending] = useState(false)
   const [modalSuccess, setModalSuccess] = useState(false)
+  const [forecasts, setForecasts] = useState({})
+  const [loadingForecast, setLoadingForecast] = useState({})
+  const [history, setHistory] = useState([])
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory`)
@@ -145,12 +148,43 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (tab === "history") {
+      fetch(`${API_BASE}/api/history`)
+        .then(res => res.json())
+        .then(data => setHistory(data))
+    }
+  }, [tab])
+
+  useEffect(() => {
     if (authenticated && !settings) {
       fetch(`${API_BASE}/api/settings`)
         .then(res => res.json())
         .then(data => setSettings(data))
     }
   }, [authenticated])
+
+  const fetchForecast = async (product) => {
+    if (forecasts[product.id] || loadingForecast[product.id]) return
+    setLoadingForecast(prev => ({ ...prev, [product.id]: true }))
+    try {
+      const res = await fetch(`${API_BASE}/api/forecast/${product.id}`)
+      const data = await res.json()
+      if (data.success && data.forecast) {
+        setForecasts(prev => ({ ...prev, [product.id]: data.forecast }))
+      }
+    } catch (err) {
+      console.error("Forecast failed", err)
+    }
+    setLoadingForecast(prev => ({ ...prev, [product.id]: false }))
+  }
+
+  useEffect(() => {
+    if (inventory.length > 0) {
+      inventory.filter(p => p.status !== "ok").forEach(product => {
+        fetchForecast(product)
+      })
+    }
+  }, [inventory])
 
   const handlePassword = () => {
     if (passwordInput === ADMIN_PASSWORD) {
@@ -169,10 +203,7 @@ function App() {
         const match = inventory.find(p => p.sku === sku)
         const status = match ? match.status : null
         const isActionable = status === "low" || status === "critical"
-        updatedProducts[sku] = {
-          ...prev.products[sku],
-          auto_send: isActionable ? newValue : false
-        }
+        updatedProducts[sku] = { ...prev.products[sku], auto_send: isActionable ? newValue : false }
       })
       return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
     })
@@ -238,6 +269,8 @@ function App() {
   const critical = inventory.filter(p => p.status === "critical").length
   const low = inventory.filter(p => p.status === "low").length
   const ok = inventory.filter(p => p.status === "ok").length
+  const healthScore = inventory.length > 0 ? Math.round((ok / inventory.length) * 100) : 0
+  const healthColor = healthScore >= 70 ? "#22c55e" : healthScore >= 40 ? "#f97316" : "#ef4444"
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: gradientBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -270,9 +303,21 @@ function App() {
           <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.12)" }}></div>
           <span style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 100, letterSpacing: 6, textTransform: "uppercase" }}>StockPulse</span>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontWeight: 500 }}>{store}</div>
-          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginTop: 2, letterSpacing: 1 }}>Live Inventory · 3 Warehouses</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          {/* Inventory Health Score */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.05)", border: `0.5px solid ${healthColor}30`, borderRadius: 10, padding: "8px 14px" }}>
+            <div>
+              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Inventory Health</div>
+              <div style={{ fontSize: 18, fontWeight: 500, color: healthColor, lineHeight: 1 }}>{healthScore}%</div>
+            </div>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: `conic-gradient(${healthColor} ${healthScore * 3.6}deg, rgba(255,255,255,0.08) 0deg)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#07111a" }}></div>
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontWeight: 500 }}>{store}</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginTop: 2, letterSpacing: 1 }}>Live Inventory · 3 Warehouses</div>
+          </div>
         </div>
       </div>
 
@@ -280,7 +325,7 @@ function App() {
 
         {/* Nav tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
-          {["inventory", "reorder rules"].map(t => (
+          {["inventory", "reorder rules", "history"].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: `0.5px solid ${tab === t ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 100, padding: "6px 18px", color: tab === t ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
               {t}
             </button>
@@ -355,6 +400,20 @@ function App() {
                       ))}
                     </div>
                   </div>
+
+                  {/* AI Forecast Panel */}
+                  {product.status !== "ok" && (
+                    <div style={{ marginTop: 14, background: "rgba(100,200,220,0.06)", border: "0.5px solid rgba(100,200,220,0.18)", borderRadius: 10, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 8, color: "rgba(100,200,220,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>⚡ AI Forecast</div>
+                      {loadingForecast[product.id] ? (
+                        <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Analyzing inventory trends...</div>
+                      ) : forecasts[product.id] ? (
+                        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, lineHeight: 1.6 }}>{forecasts[product.id]}</div>
+                      ) : (
+                        <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Forecast unavailable</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -394,7 +453,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Auto reorder toggle */}
                 {settings && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(249,115,22,0.06)", border: "0.5px solid rgba(249,115,22,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -417,7 +475,6 @@ function App() {
                   </div>
                 )}
 
-                {/* Global default reorder qty */}
                 {settings && (
                   <div style={{ background: "rgba(99,102,241,0.06)", border: "0.5px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -436,7 +493,6 @@ function App() {
                   </div>
                 )}
 
-                {/* Admin filter tabs */}
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                   {["all", "critical", "low", "ok"].map(f => (
                     <button key={f} onClick={() => setAdminFilter(f)} style={{ background: adminFilter === f ? "rgba(255,255,255,0.1)" : "transparent", border: `0.5px solid ${adminFilter === f ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 100, padding: "6px 16px", color: adminFilter === f ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
@@ -518,6 +574,63 @@ function App() {
                   </div>
                 )}
               </>
+            )}
+          </>
+        )}
+
+        {/* ── HISTORY TAB ── */}
+        {tab === "history" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 20 }}>
+              <div>
+                <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Reorder History</div>
+                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>All reorders triggered with timestamps and details</div>
+              </div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: 1, textTransform: "uppercase" }}>{history.length} total reorders</div>
+            </div>
+
+            {history.length === 0 ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 4 }}>No reorders yet</div>
+                  <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>Reorders triggered from the Reorder Rules tab will appear here</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {history.map((entry, i) => (
+                  <div key={i} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(99,102,241,0.12)", border: "0.5px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: 16 }}>📦</span>
+                      </div>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{entry.title}</div>
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                          <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1.5 }}>{entry.sku}</span>
+                          <span style={{ background: statusColor(entry.status) + "18", color: statusColor(entry.status), border: `0.5px solid ${statusColor(entry.status)}40`, borderRadius: 100, padding: "1px 7px", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>{entry.status}</span>
+                          {entry.supplier_name && <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>→ {entry.supplier_name}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Qty Ordered</div>
+                        <div style={{ color: "rgba(100,200,220,0.9)", fontSize: 18, fontWeight: 500 }}>{entry.total_qty_ordered}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Stock at Reorder</div>
+                        <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>{entry.inventory_at_reorder} units</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Timestamp</div>
+                        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11 }}>{entry.timestamp}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </>
         )}
