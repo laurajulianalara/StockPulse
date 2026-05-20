@@ -41,7 +41,6 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
 
-        {/* Header */}
         <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
@@ -59,10 +58,10 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
                 <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontWeight: 500, marginBottom: 3 }}>{product.title}</div>
                 <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, letterSpacing: 2 }}>{product.sku}</div>
               </div>
-              <span style={{ background: color + "18", color: color, border: `0.5px solid ${color}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>{product.status}</span>
+              <span style={{ background: color + "18", color, border: `0.5px solid ${color}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>{product.status}</span>
             </div>
             <div style={{ display: "flex", gap: 24, marginTop: 12, paddingTop: 12, borderTop: "0.5px solid rgba(255,255,255,0.06)" }}>
-              <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Current Stock</div><div style={{ color: color, fontSize: 22, fontWeight: 500 }}>{product.inventory}</div></div>
+              <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Current Stock</div><div style={{ color, fontSize: 22, fontWeight: 500 }}>{product.inventory}</div></div>
               <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Threshold</div><div style={{ color: "rgba(255,255,255,0.4)", fontSize: 22 }}>{product.threshold}</div></div>
               <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Total to Order</div><div style={{ color: "rgba(100,200,220,0.9)", fontSize: 22, fontWeight: 500 }}>{totalQty}</div></div>
             </div>
@@ -153,14 +152,13 @@ function App() {
   const [store, setStore] = useState("")
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
+  const [adminFilter, setAdminFilter] = useState("all")
   const [authenticated, setAuthenticated] = useState(false)
   const [passwordInput, setPasswordInput] = useState("")
   const [passwordError, setPasswordError] = useState(false)
   const [settings, setSettings] = useState(null)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
-  const [sendingPO, setSendingPO] = useState(null)
-  const [poSuccess, setPoSuccess] = useState(null)
   const [modalProduct, setModalProduct] = useState(null)
   const [modalSending, setModalSending] = useState(false)
   const [modalSuccess, setModalSuccess] = useState(false)
@@ -208,6 +206,17 @@ function App() {
     })
   }
 
+  const handleGlobalQtyChange = (qty) => {
+    const parsed = parseInt(qty) || 0
+    setSettings(prev => {
+      const updatedProducts = {}
+      Object.keys(prev.products).forEach(sku => {
+        updatedProducts[sku] = { ...prev.products[sku], reorder_qty: parsed }
+      })
+      return { ...prev, global_reorder_qty: parsed, products: updatedProducts }
+    })
+  }
+
   const handleSaveSettings = async () => {
     setSavingSettings(true)
     await fetch(`${API_BASE}/api/settings`, {
@@ -218,21 +227,6 @@ function App() {
     setSavingSettings(false)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 3000)
-  }
-
-  const handleSendPO = async (product) => {
-    setSendingPO(product.id)
-    try {
-      const res = await fetch(`${API_BASE}/api/po/${product.id}`, { method: "POST" })
-      const data = await res.json()
-      if (data.success) {
-        setPoSuccess(product.id)
-        setTimeout(() => setPoSuccess(null), 4000)
-      }
-    } catch (err) {
-      console.error("PO failed", err)
-    }
-    setSendingPO(null)
   }
 
   const handleModalConfirm = async (product, qtyPerWarehouse, poMessage, totalQty) => {
@@ -274,6 +268,7 @@ function App() {
   }
 
   const filtered = filter === "all" ? inventory : inventory.filter(p => p.status === filter)
+  const adminFiltered = adminFilter === "all" ? inventory : inventory.filter(p => p.status === adminFilter)
   const critical = inventory.filter(p => p.status === "critical").length
   const low = inventory.filter(p => p.status === "low").length
   const ok = inventory.filter(p => p.status === "ok").length
@@ -411,13 +406,10 @@ function App() {
                   </div>
                   <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Admin Access Required</div>
                   <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginBottom: 20 }}>Enter your admin password to access Reorder Rules</div>
-
-                  {/* Demo password hint */}
                   <div style={{ background: "rgba(100,180,200,0.1)", border: "0.5px solid rgba(100,180,200,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
                     <div style={{ fontSize: 9, color: "rgba(100,180,200,0.55)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Demo Access Password</div>
                     <div style={{ fontSize: 22, color: "rgba(100,180,200,0.95)", fontWeight: 600, letterSpacing: 10 }}>0000</div>
                   </div>
-
                   <input
                     type="password"
                     placeholder="Enter password"
@@ -445,35 +437,9 @@ function App() {
                   </div>
                 </div>
 
-                {/* Global default reorder qty */}
-                {settings && (
-                  <div style={{ background: "rgba(99,102,241,0.06)", border: "0.5px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: 7, background: "rgba(99,102,241,0.12)", border: "0.5px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
-                      </div>
-                      <div>
-                        <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 2 }}>Global Default Reorder Quantity</div>
-                        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Applied universally to all auto-reorders — ideal for single-product stores or low SKU counts</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <input
-                        type="number"
-                        min="1"
-                        value={settings.global_reorder_qty || ""}
-                        onChange={e => setSettings(prev => ({ ...prev, global_reorder_qty: parseInt(e.target.value) || 0 }))}
-                        placeholder="e.g. 50"
-                        style={{ width: 80, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(99,102,241,0.3)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
-                      />
-                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase" }}>units</span>
-                    </div>
-                  </div>
-                )}
-
                 {/* Auto reorder toggle */}
                 {settings && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(249,115,22,0.06)", border: "0.5px solid rgba(249,115,22,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(249,115,22,0.06)", border: "0.5px solid rgba(249,115,22,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 14 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <div style={{ width: 30, height: 30, borderRadius: 7, background: "rgba(249,115,22,0.12)", border: "0.5px solid rgba(249,115,22,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -495,19 +461,54 @@ function App() {
                   </div>
                 )}
 
+                {/* Global default reorder qty */}
+                {settings && (
+                  <div style={{ background: "rgba(99,102,241,0.06)", border: "0.5px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 7, background: "rgba(99,102,241,0.12)", border: "0.5px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+                      </div>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 2 }}>Global Default Reorder Quantity</div>
+                        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Sets reorder qty universally for all products — updates all individual quantities below</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={settings.global_reorder_qty || ""}
+                        onChange={e => handleGlobalQtyChange(e.target.value)}
+                        placeholder="e.g. 50"
+                        style={{ width: 80, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(99,102,241,0.3)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
+                      />
+                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase" }}>units</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Admin filter tabs */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  {["all", "critical", "low", "ok"].map(f => (
+                    <button key={f} onClick={() => setAdminFilter(f)} style={{ background: adminFilter === f ? "rgba(255,255,255,0.1)" : "transparent", border: `0.5px solid ${adminFilter === f ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 100, padding: "6px 16px", color: adminFilter === f ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+
                 {settings && (
                   <div style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 14, overflow: "hidden" }}>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr>
-                            {["Product", "Status", "Threshold", "Reorder Qty", "Supplier Name", "Supplier Email", "Lead Time", "Auto-Send", "Trigger Reorder", "Send PO"].map(h => (
+                            {["Product", "Status", "Threshold", "Reorder Qty", "Supplier Name", "Supplier Email", "Lead Time", "Auto-Send", "Trigger Reorder"].map(h => (
                               <th key={h} style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", letterSpacing: 2, textTransform: "uppercase", padding: "14px 12px", textAlign: "left", fontWeight: 400, borderBottom: "0.5px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {inventory.map((product, i) => {
+                          {adminFiltered.map((product, i) => {
                             const ps = settings.products[product.sku] || {}
                             return (
                               <tr key={product.id} style={{ borderTop: i === 0 ? "none" : "0.5px solid rgba(255,255,255,0.05)" }}>
@@ -547,14 +548,6 @@ function App() {
                                       ⚡ Reorder
                                     </button>
                                   )}
-                                </td>
-                                <td style={{ padding: "12px" }}>
-                                  <button
-                                    onClick={() => handleSendPO(product)}
-                                    disabled={sendingPO === product.id}
-                                    style={{ background: poSuccess === product.id ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)", border: `1px solid ${poSuccess === product.id ? "rgba(34,197,94,0.5)" : "rgba(99,102,241,0.45)"}`, borderRadius: 7, padding: "7px 12px", color: poSuccess === product.id ? "#22c55e" : "#818cf8", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
-                                    {sendingPO === product.id ? "⏳..." : poSuccess === product.id ? "✅ Sent!" : "📋 Send PO"}
-                                  </button>
                                 </td>
                               </tr>
                             )
