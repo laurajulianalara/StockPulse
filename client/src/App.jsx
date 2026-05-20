@@ -33,12 +33,57 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
   const [poMessage, setPoMessage] = useState(
     `Dear ${ps.supplier_name || "Supplier"},\n\nWe would like to place a reorder for the following product due to low inventory levels.\n\nPlease confirm receipt and expected ship date.\n\nThank you,\nHarlow & Co. Operations Team`
   )
+  const [useAiQty, setUseAiQty] = useState(false)
+  const [aiQtyLoading, setAiQtyLoading] = useState(false)
+  const [aiQtyData, setAiQtyData] = useState(null)
+  const [aiQtyError, setAiQtyError] = useState(false)
+
   const totalQty = Object.values(qtyPerWarehouse).reduce((a, b) => a + (parseInt(b) || 0), 0)
   const color = product.status === "critical" ? "#ef4444" : "#f97316"
+
+  const fetchAiQty = async () => {
+    if (aiQtyData) return
+    setAiQtyLoading(true)
+    setAiQtyError(false)
+    try {
+      const res = await fetch(`${API_BASE}/api/forecast-qty/${product.id}`)
+      const data = await res.json()
+      if (data.success && data.recommendation) {
+        setAiQtyData(data.recommendation)
+        setQtyPerWarehouse(data.recommendation.per_warehouse)
+      } else {
+        setAiQtyError(true)
+      }
+    } catch (err) {
+      setAiQtyError(true)
+    }
+    setAiQtyLoading(false)
+  }
+
+  const handleAiToggle = () => {
+    const newVal = !useAiQty
+    setUseAiQty(newVal)
+    if (newVal) {
+      if (aiQtyData) {
+        setQtyPerWarehouse(aiQtyData.per_warehouse)
+      } else {
+        fetchAiQty()
+      }
+    } else {
+      setQtyPerWarehouse(
+        product.locations.reduce((acc, loc) => {
+          acc[loc.location] = ps.reorder_qty ? Math.round(ps.reorder_qty / product.locations.length) : 10
+          return acc
+        }, {})
+      )
+    }
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
+
+        {/* Modal header */}
         <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
@@ -46,7 +91,10 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 32, height: 32, color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
+
         <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Product info */}
           <div style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${color}30`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
               <div>
@@ -61,23 +109,70 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
               <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Total to Order</div><div style={{ color: "rgba(100,200,220,0.9)", fontSize: 22, fontWeight: 500 }}>{totalQty}</div></div>
             </div>
           </div>
+
+          {/* AI Qty Toggle */}
+          <div style={{ background: "rgba(100,200,220,0.06)", border: `0.5px solid ${useAiQty ? "rgba(100,200,220,0.35)" : "rgba(100,200,220,0.15)"}`, borderRadius: 10, padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(100,200,220,0.1)", border: "0.5px solid rgba(100,200,220,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 13 }}>⚡</span>
+                </div>
+                <div>
+                  <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 1 }}>Use AI Recommended Quantities</div>
+                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Let AI calculate optimal reorder qty per warehouse based on sales velocity</div>
+                </div>
+              </div>
+              <div onClick={handleAiToggle} style={{ width: 42, height: 24, borderRadius: 100, background: useAiQty ? "rgba(100,200,220,0.3)" : "rgba(255,255,255,0.08)", border: `0.5px solid ${useAiQty ? "rgba(100,200,220,0.5)" : "rgba(255,255,255,0.12)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s", flexShrink: 0 }}>
+                <div style={{ position: "absolute", width: 16, height: 16, borderRadius: "50%", background: useAiQty ? "rgba(100,200,220,0.9)" : "rgba(255,255,255,0.4)", top: 3, left: useAiQty ? 22 : 4, transition: "all 0.3s" }}></div>
+              </div>
+            </div>
+            {useAiQty && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid rgba(100,200,220,0.1)" }}>
+                {aiQtyLoading ? (
+                  <div style={{ color: "rgba(100,200,220,0.6)", fontSize: 11, fontStyle: "italic" }}>⚡ AI is calculating optimal quantities...</div>
+                ) : aiQtyError ? (
+                  <div style={{ color: "#ef4444", fontSize: 11 }}>AI recommendation unavailable — using default quantities</div>
+                ) : aiQtyData ? (
+                  <div style={{ color: "rgba(100,200,220,0.8)", fontSize: 11, lineHeight: 1.6 }}>
+                    <span style={{ color: "rgba(100,200,220,0.5)", fontWeight: 500 }}>AI says: </span>{aiQtyData.reasoning}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {/* Qty per warehouse */}
           <div>
-            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Quantity to Order Per Warehouse</div>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
+              Quantity to Order Per Warehouse
+              {useAiQty && !aiQtyLoading && aiQtyData && <span style={{ color: "rgba(100,200,220,0.6)", marginLeft: 8, fontSize: 8 }}>⚡ AI RECOMMENDED</span>}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {product.locations.map((loc, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 9, padding: "10px 14px" }}>
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.04)", border: `0.5px solid ${useAiQty && aiQtyData ? "rgba(100,200,220,0.15)" : "rgba(255,255,255,0.08)"}`, borderRadius: 9, padding: "10px 14px" }}>
                   <div>
                     <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{loc.location}</div>
                     <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 1 }}>Current: {loc.quantity} units</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Order qty:</div>
-                    <input type="number" min="0" value={qtyPerWarehouse[loc.location] || ""} onChange={e => setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))} style={{ width: 64, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(255,255,255,0.15)", borderRadius: 7, padding: "6px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }} />
+                    <input
+                      type="number"
+                      min="0"
+                      value={qtyPerWarehouse[loc.location] || ""}
+                      onChange={e => {
+                        setUseAiQty(false)
+                        setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))
+                      }}
+                      style={{ width: 64, background: useAiQty && aiQtyData ? "rgba(100,200,220,0.08)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${useAiQty && aiQtyData ? "rgba(100,200,220,0.3)" : "rgba(255,255,255,0.15)"}`, borderRadius: 7, padding: "6px 10px", color: useAiQty && aiQtyData ? "rgba(100,200,220,0.9)" : "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* Supplier info */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Supplier Information</div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
@@ -101,13 +196,17 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
               </div>
             </div>
           </div>
+
+          {/* PO message */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Message to Include in PO</div>
             <textarea value={poMessage} onChange={e => setPoMessage(e.target.value)} rows={5} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }} />
           </div>
+
+          {/* Buttons */}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
-            <button onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)} disabled={sending} style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: sending ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
+            <button onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)} disabled={sending || aiQtyLoading} style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: (sending || aiQtyLoading) ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
               {sending ? "⏳ Sending Reorder..." : success ? "✅ Reorder Sent!" : "⚡ Confirm & Send Reorder"}
             </button>
           </div>
@@ -304,7 +403,6 @@ function App() {
           <span style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 100, letterSpacing: 6, textTransform: "uppercase" }}>StockPulse</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-          {/* Inventory Health Score */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.05)", border: `0.5px solid ${healthColor}30`, borderRadius: 10, padding: "8px 14px" }}>
             <div>
               <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Inventory Health</div>
