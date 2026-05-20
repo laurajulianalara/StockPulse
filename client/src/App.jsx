@@ -28,8 +28,6 @@ function App() {
   const [store, setStore] = useState("")
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("all")
-  const [reordering, setReordering] = useState(null)
-  const [reorderSuccess, setReorderSuccess] = useState(null)
   const [authenticated, setAuthenticated] = useState(false)
   const [passwordInput, setPasswordInput] = useState("")
   const [passwordError, setPasswordError] = useState(false)
@@ -38,6 +36,8 @@ function App() {
   const [settingsSaved, setSettingsSaved] = useState(false)
   const [sendingPO, setSendingPO] = useState(null)
   const [poSuccess, setPoSuccess] = useState(null)
+  const [reordering, setReordering] = useState(null)
+  const [reorderSuccess, setReorderSuccess] = useState(null)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory`)
@@ -67,20 +67,20 @@ function App() {
   }
 
   const handleGlobalToggle = () => {
-  setSettings(prev => {
-    const newValue = !prev.auto_reorder_enabled
-    const updatedProducts = {}
-    Object.keys(prev.products).forEach(sku => {
-      const product = inventory.find(p => p.sku === sku)
-      const isLowOrCritical = product && (product.status === "low" || product.status === "critical")
-      updatedProducts[sku] = {
-        ...prev.products[sku],
-        auto_send: isLowOrCritical ? newValue : prev.products[sku].auto_send
-      }
+    setSettings(prev => {
+      const newValue = !prev.auto_reorder_enabled
+      const updatedProducts = {}
+      Object.keys(prev.products).forEach(sku => {
+        const product = inventory.find(p => p.sku === sku)
+        const isLowOrCritical = product && (product.status === "low" || product.status === "critical")
+        updatedProducts[sku] = {
+          ...prev.products[sku],
+          auto_send: isLowOrCritical ? newValue : prev.products[sku].auto_send
+        }
+      })
+      return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
     })
-    return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
-    })
-  } 
+  }
 
   const handleSaveSettings = async () => {
     setSavingSettings(true)
@@ -215,9 +215,11 @@ function App() {
               ))}
             </div>
 
+            {/* Product grid — visibility only, no reorder buttons */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
               {filtered.map(product => (
                 <div key={product.id} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${product.status === "ok" ? "rgba(255,255,255,0.1)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22 }}>
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
                     <div>
                       <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{product.title}</div>
@@ -227,6 +229,7 @@ function App() {
                       {product.status}
                     </span>
                   </div>
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", marginBottom: 18 }}>
                     <div>
                       <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Stock</div>
@@ -237,6 +240,7 @@ function App() {
                       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 20 }}>{product.threshold}</div>
                     </div>
                   </div>
+
                   <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
                     <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>By Location</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -253,11 +257,7 @@ function App() {
                       ))}
                     </div>
                   </div>
-                  {product.status !== "ok" && (
-                    <button onClick={() => handleReorder(product)} disabled={reordering === product.id} style={{ marginTop: 14, width: "100%", background: reorderSuccess === product.id ? "#22c55e18" : statusColor(product.status) + "15", border: `0.5px solid ${reorderSuccess === product.id ? "#22c55e50" : statusColor(product.status) + "40"}`, borderRadius: 8, padding: "10px", color: reorderSuccess === product.id ? "#22c55e" : statusColor(product.status), fontSize: 10, letterSpacing: 2, textTransform: "uppercase", cursor: reordering === product.id ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
-                      {reordering === product.id ? "⏳ Sending Alert..." : reorderSuccess === product.id ? "✅ Reorder Alert Sent!" : "Trigger Reorder"}
-                    </button>
-                  )}
+
                 </div>
               ))}
             </div>
@@ -294,7 +294,7 @@ function App() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
                   <div>
                     <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Reorder Rules</div>
-                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>Configure reorder quantities, thresholds, and supplier details per product</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>Configure reorder quantities, thresholds, supplier details and trigger reorders</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: "5px 12px" }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -331,7 +331,7 @@ function App() {
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
                         <thead>
                           <tr>
-                            {["Product", "Status", "Threshold", "Reorder Qty", "Supplier Name", "Supplier Email", "Lead Time", "Auto-Send", "Send PO"].map(h => (
+                            {["Product", "Status", "Threshold", "Reorder Qty", "Supplier Name", "Supplier Email", "Lead Time", "Auto-Send", "Trigger Reorder", "Send PO"].map(h => (
                               <th key={h} style={{ fontSize: 8, color: "rgba(255,255,255,0.25)", letterSpacing: 2, textTransform: "uppercase", padding: "14px 12px", textAlign: "left", fontWeight: 400, borderBottom: "0.5px solid rgba(255,255,255,0.06)", whiteSpace: "nowrap" }}>{h}</th>
                             ))}
                           </tr>
@@ -368,6 +368,13 @@ function App() {
                                     style={{ width: 36, height: 20, borderRadius: 100, background: ps.auto_send ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${ps.auto_send ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
                                     <div style={{ position: "absolute", width: 14, height: 14, borderRadius: "50%", background: ps.auto_send ? "#f97316" : "rgba(255,255,255,0.35)", top: 2.5, left: ps.auto_send ? 18 : 3, transition: "all 0.3s" }}></div>
                                   </div>
+                                </td>
+                                <td style={{ padding: "12px" }}>
+                                  {product.status !== "ok" && (
+                                    <button onClick={() => handleReorder(product)} disabled={reordering === product.id} style={{ background: reorderSuccess === product.id ? "rgba(34,197,94,0.12)" : statusColor(product.status) + "12", border: `0.5px solid ${reorderSuccess === product.id ? "rgba(34,197,94,0.3)" : statusColor(product.status) + "30"}`, borderRadius: 7, padding: "5px 10px", color: reorderSuccess === product.id ? "#22c55e" : statusColor(product.status), fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                      {reordering === product.id ? "Sending..." : reorderSuccess === product.id ? "✓ Sent!" : "Trigger"}
+                                    </button>
+                                  )}
                                 </td>
                                 <td style={{ padding: "12px" }}>
                                   <button onClick={() => handleSendPO(product)} disabled={sendingPO === product.id} style={{ background: poSuccess === product.id ? "rgba(34,197,94,0.12)" : "rgba(99,102,241,0.12)", border: `0.5px solid ${poSuccess === product.id ? "rgba(34,197,94,0.3)" : "rgba(99,102,241,0.25)"}`, borderRadius: 7, padding: "5px 10px", color: poSuccess === product.id ? "#22c55e" : "#818cf8", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
