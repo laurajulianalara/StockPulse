@@ -22,6 +22,131 @@ const grainStyle2 = {
   backgroundSize: "120px", opacity: 0.55, mixBlendMode: "soft-light", pointerEvents: "none", zIndex: 0
 }
 
+function ReorderModal({ product, settings, onClose, onConfirm, sending, success }) {
+  const ps = settings?.products?.[product.sku] || {}
+  const [qtyPerWarehouse, setQtyPerWarehouse] = useState(
+    product.locations.reduce((acc, loc) => {
+      acc[loc.location] = ps.reorder_qty ? Math.round(ps.reorder_qty / product.locations.length) : 10
+      return acc
+    }, {})
+  )
+  const [poMessage, setPoMessage] = useState(
+    `Dear ${ps.supplier_name || "Supplier"},\n\nWe would like to place a reorder for the following product due to low inventory levels.\n\nPlease confirm receipt and expected ship date.\n\nThank you,\nHarlow & Co. Operations Team`
+  )
+
+  const totalQty = Object.values(qtyPerWarehouse).reduce((a, b) => a + (parseInt(b) || 0), 0)
+  const color = product.status === "critical" ? "#ef4444" : "#f97316"
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
+
+        {/* Header */}
+        <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginTop: 2 }}>Review details before sending</div>
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 32, height: 32, color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16 }}>✕</button>
+        </div>
+
+        <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Product info */}
+          <div style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${color}30`, borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+              <div>
+                <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 14, fontWeight: 500, marginBottom: 3 }}>{product.title}</div>
+                <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, letterSpacing: 2 }}>{product.sku}</div>
+              </div>
+              <span style={{ background: color + "18", color: color, border: `0.5px solid ${color}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>{product.status}</span>
+            </div>
+            <div style={{ display: "flex", gap: 24, marginTop: 12, paddingTop: 12, borderTop: "0.5px solid rgba(255,255,255,0.06)" }}>
+              <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Current Stock</div><div style={{ color: color, fontSize: 22, fontWeight: 500 }}>{product.inventory}</div></div>
+              <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Threshold</div><div style={{ color: "rgba(255,255,255,0.4)", fontSize: 22 }}>{product.threshold}</div></div>
+              <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Total to Order</div><div style={{ color: "rgba(100,200,220,0.9)", fontSize: 22, fontWeight: 500 }}>{totalQty}</div></div>
+            </div>
+          </div>
+
+          {/* Qty per warehouse */}
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Quantity to Order Per Warehouse</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {product.locations.map((loc, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 9, padding: "10px 14px" }}>
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>{loc.location}</div>
+                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 1 }}>Current: {loc.quantity} units</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Order qty:</div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={qtyPerWarehouse[loc.location] || ""}
+                      onChange={e => setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))}
+                      style={{ width: 64, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(255,255,255,0.15)", borderRadius: 7, padding: "6px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Supplier info */}
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Supplier Information</div>
+            <div style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+                <div style={{ padding: "12px 16px", borderRight: "0.5px solid rgba(255,255,255,0.06)", borderBottom: "0.5px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Supplier Name</div>
+                  <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{ps.supplier_name || "—"}</div>
+                </div>
+                <div style={{ padding: "12px 16px", borderBottom: "0.5px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Supplier Email</div>
+                  <div style={{ color: "rgba(100,200,220,0.8)", fontSize: 12 }}>{ps.supplier_email || "—"}</div>
+                </div>
+                <div style={{ padding: "12px 16px", borderRight: "0.5px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Lead Time</div>
+                  <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{ps.lead_time || "—"}</div>
+                </div>
+                <div style={{ padding: "12px 16px" }}>
+                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Units to Order</div>
+                  <div style={{ color: "rgba(100,200,220,0.9)", fontSize: 12, fontWeight: 500 }}>{totalQty} units</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* PO message */}
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Message to Include in PO</div>
+            <textarea
+              value={poMessage}
+              onChange={e => setPoMessage(e.target.value)}
+              rows={5}
+              style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }}
+            />
+          </div>
+
+          {/* Buttons */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button
+              onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)}
+              disabled={sending}
+              style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: sending ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
+              {sending ? "⏳ Sending Reorder..." : success ? "✅ Reorder Sent!" : "⚡ Confirm & Send Reorder"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [tab, setTab] = useState("inventory")
   const [inventory, setInventory] = useState([])
@@ -36,8 +161,9 @@ function App() {
   const [settingsSaved, setSettingsSaved] = useState(false)
   const [sendingPO, setSendingPO] = useState(null)
   const [poSuccess, setPoSuccess] = useState(null)
-  const [reordering, setReordering] = useState(null)
-  const [reorderSuccess, setReorderSuccess] = useState(null)
+  const [modalProduct, setModalProduct] = useState(null)
+  const [modalSending, setModalSending] = useState(false)
+  const [modalSuccess, setModalSuccess] = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory`)
@@ -109,22 +235,26 @@ function App() {
     setSendingPO(null)
   }
 
-  const handleReorder = async (product) => {
-    setReordering(product.id)
+  const handleModalConfirm = async (product, qtyPerWarehouse, poMessage, totalQty) => {
+    setModalSending(true)
     try {
       const res = await fetch(`${API_BASE}/api/reorder/${product.id}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qty_per_warehouse: qtyPerWarehouse, po_message: poMessage, total_qty: totalQty })
       })
       const data = await res.json()
       if (data.success) {
-        setReorderSuccess(product.id)
-        setTimeout(() => setReorderSuccess(null), 4000)
+        setModalSuccess(true)
+        setTimeout(() => {
+          setModalSuccess(false)
+          setModalProduct(null)
+        }, 2500)
       }
     } catch (err) {
       console.error("Reorder failed", err)
     }
-    setReordering(null)
+    setModalSending(false)
   }
 
   const statusColor = (status) => {
@@ -158,6 +288,17 @@ function App() {
     <div style={{ minHeight: "100vh", background: gradientBg, fontFamily: "sans-serif", position: "relative" }}>
       <div style={grainStyle1}></div>
       <div style={grainStyle2}></div>
+
+      {modalProduct && (
+        <ReorderModal
+          product={modalProduct}
+          settings={settings}
+          onClose={() => { setModalProduct(null); setModalSuccess(false) }}
+          onConfirm={handleModalConfirm}
+          sending={modalSending}
+          success={modalSuccess}
+        />
+      )}
 
       {/* Header */}
       <div style={{ borderBottom: "0.5px solid rgba(255,255,255,0.08)", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 2 }}>
@@ -272,9 +413,9 @@ function App() {
                   <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginBottom: 20 }}>Enter your admin password to access Reorder Rules</div>
 
                   {/* Demo password hint */}
-                  <div style={{ background: "rgba(100,180,200,0.12)", border: "0.5px solid rgba(100,180,200,0.35)", borderRadius: 8, padding: "10px 14px", marginBottom: 20 }}>
-                    <div style={{ fontSize: 9, color: "rgba(100,180,200,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Demo Access</div>
-                    <div style={{ fontSize: 13, color: "rgba(100,180,200,0.9)", fontWeight: 500, letterSpacing: 6 }}>0000</div>
+                  <div style={{ background: "rgba(100,180,200,0.1)", border: "0.5px solid rgba(100,180,200,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+                    <div style={{ fontSize: 9, color: "rgba(100,180,200,0.55)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Demo Access Password</div>
+                    <div style={{ fontSize: 22, color: "rgba(100,180,200,0.95)", fontWeight: 600, letterSpacing: 10 }}>0000</div>
                   </div>
 
                   <input
@@ -304,6 +445,33 @@ function App() {
                   </div>
                 </div>
 
+                {/* Global default reorder qty */}
+                {settings && (
+                  <div style={{ background: "rgba(99,102,241,0.06)", border: "0.5px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "14px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: 7, background: "rgba(99,102,241,0.12)", border: "0.5px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+                      </div>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 2 }}>Global Default Reorder Quantity</div>
+                        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Applied universally to all auto-reorders — ideal for single-product stores or low SKU counts</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <input
+                        type="number"
+                        min="1"
+                        value={settings.global_reorder_qty || ""}
+                        onChange={e => setSettings(prev => ({ ...prev, global_reorder_qty: parseInt(e.target.value) || 0 }))}
+                        placeholder="e.g. 50"
+                        style={{ width: 80, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(99,102,241,0.3)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
+                      />
+                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase" }}>units</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Auto reorder toggle */}
                 {settings && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(249,115,22,0.06)", border: "0.5px solid rgba(249,115,22,0.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -374,23 +542,9 @@ function App() {
                                 <td style={{ padding: "12px" }}>
                                   {product.status !== "ok" && (
                                     <button
-                                      onClick={() => handleReorder(product)}
-                                      disabled={reordering === product.id}
-                                      style={{
-                                        background: reorderSuccess === product.id ? "rgba(34,197,94,0.2)" : statusColor(product.status) + "25",
-                                        border: `1px solid ${reorderSuccess === product.id ? "rgba(34,197,94,0.5)" : statusColor(product.status) + "60"}`,
-                                        borderRadius: 7,
-                                        padding: "7px 12px",
-                                        color: reorderSuccess === product.id ? "#22c55e" : statusColor(product.status),
-                                        fontSize: 10,
-                                        fontWeight: 700,
-                                        letterSpacing: 1.5,
-                                        textTransform: "uppercase",
-                                        cursor: reordering === product.id ? "not-allowed" : "pointer",
-                                        whiteSpace: "nowrap",
-                                        transition: "all 0.3s"
-                                      }}>
-                                      {reordering === product.id ? "⏳ Sending..." : reorderSuccess === product.id ? "✅ Sent!" : "⚡ Reorder"}
+                                      onClick={() => setModalProduct(product)}
+                                      style={{ background: statusColor(product.status) + "25", border: `1px solid ${statusColor(product.status)}60`, borderRadius: 7, padding: "7px 12px", color: statusColor(product.status), fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                      ⚡ Reorder
                                     </button>
                                   )}
                                 </td>
@@ -398,21 +552,8 @@ function App() {
                                   <button
                                     onClick={() => handleSendPO(product)}
                                     disabled={sendingPO === product.id}
-                                    style={{
-                                      background: poSuccess === product.id ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)",
-                                      border: `1px solid ${poSuccess === product.id ? "rgba(34,197,94,0.5)" : "rgba(99,102,241,0.45)"}`,
-                                      borderRadius: 7,
-                                      padding: "7px 12px",
-                                      color: poSuccess === product.id ? "#22c55e" : "#818cf8",
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      letterSpacing: 1.5,
-                                      textTransform: "uppercase",
-                                      cursor: "pointer",
-                                      whiteSpace: "nowrap",
-                                      transition: "all 0.3s"
-                                    }}>
-                                    {sendingPO === product.id ? "⏳ Sending..." : poSuccess === product.id ? "✅ Sent!" : "📋 Send PO"}
+                                    style={{ background: poSuccess === product.id ? "rgba(34,197,94,0.2)" : "rgba(99,102,241,0.2)", border: `1px solid ${poSuccess === product.id ? "rgba(34,197,94,0.5)" : "rgba(99,102,241,0.45)"}`, borderRadius: 7, padding: "7px 12px", color: poSuccess === product.id ? "#22c55e" : "#818cf8", fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                    {sendingPO === product.id ? "⏳..." : poSuccess === product.id ? "✅ Sent!" : "📋 Send PO"}
                                   </button>
                                 </td>
                               </tr>
