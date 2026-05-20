@@ -103,7 +103,7 @@ def get_status(inventory, threshold):
 def build_display_title(product_title, variant_title):
     if not variant_title or variant_title.lower() in ["default title", "default"]:
         return product_title
-    return f"{product_title} — {variant_title}"
+    return f"{product_title} - {variant_title}"
 
 def ensure_product_in_settings(settings, sku):
     if sku not in settings["products"]:
@@ -117,7 +117,6 @@ def ensure_product_in_settings(settings, sku):
 def get_ai_forecast(product):
     print(f"[StockPulse] Getting AI forecast for {product['title']}, API key present: {bool(ANTHROPIC_API_KEY)}")
     if not ANTHROPIC_API_KEY:
-        print("[StockPulse] No Anthropic API key found")
         return None
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -125,36 +124,23 @@ def get_ai_forecast(product):
         status = product["status"]
         inventory = product["inventory"]
         threshold = product["threshold"]
-
         random.seed(hash(product["sku"]) % 1000)
         daily_sales = round(random.uniform(1.5, 4.5), 1)
         days_of_stock = round(inventory / daily_sales, 1) if daily_sales > 0 and inventory > 0 else 0
         weekly_sales = round(daily_sales * 7, 1)
         monthly_sales = round(daily_sales * 30, 1)
-
-        if inventory == 0:
-            urgency = "completely out of stock across all warehouses"
-        elif status == "critical":
-            urgency = f"critically low at {inventory} units, less than 50% of the reorder threshold"
-        else:
-            urgency = f"below the reorder threshold at {inventory} units"
-
-        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home décor retailer with 3 warehouses.
-
+        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home decor retailer with 3 warehouses.
 Product: {product['title']} (SKU: {product['sku']})
 Current Total Stock: {inventory} units
 Reorder Threshold: {threshold} units
-Status: {status.upper()} — {urgency}
+Status: {status.upper()}
 Stock by Location: {location_text}
-
 Simulated Sales Data (last 30 days):
 - Average daily sales: {daily_sales} units/day
 - Weekly average: {weekly_sales} units/week
 - Monthly total: {monthly_sales} units/month
 - Estimated days of stock remaining: {days_of_stock} days
-
-Write a concise 2-sentence forecast. Include how many days until stockout and a specific recommended reorder quantity to cover 45 days of demand. Be direct and urgent where appropriate. Do not use bullet points."""
-
+Write a concise 2-sentence forecast. Include how many days until stockout and a specific recommended reorder quantity to cover 45 days of demand. Be direct and urgent. Do not use bullet points."""
         message = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=150,
@@ -175,12 +161,10 @@ def get_ai_qty_recommendation(product, settings):
         ps = settings.get("products", {}).get(product["sku"], {})
         lead_time = ps.get("lead_time", "5-7 days")
         location_names = {loc["location"]: loc["quantity"] for loc in product["locations"]}
-
         random.seed(hash(product["sku"]) % 1000)
         daily_sales = round(random.uniform(1.5, 4.5), 1)
-
-        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home décor retailer.
-
+        example_json = json.dumps({k: 15 for k in location_names})
+        prompt = f"""You are an inventory analyst for Harlow & Co.
 Product: {product['title']} (SKU: {product['sku']})
 Current Total Stock: {product['inventory']} units
 Reorder Threshold: {product['threshold']} units
@@ -188,12 +172,9 @@ Status: {product['status'].upper()}
 Locations: {json.dumps(location_names)}
 Supplier Lead Time: {lead_time}
 Average Daily Sales: {daily_sales} units/day
-
-Recommend a reorder quantity per warehouse to cover 45 days of demand. Distribute proportionally based on current stock levels.
-
-Respond ONLY with valid JSON, no markdown, no explanation outside the JSON:
-{{"total_qty": 45, "per_warehouse": {json.dumps({k: 15 for k in location_names})}, "reasoning": "One sentence explanation"}}"""
-
+Recommend a reorder quantity per warehouse to cover 45 days of demand.
+Respond ONLY with valid JSON, no markdown:
+{{"total_qty": 45, "per_warehouse": {example_json}, "reasoning": "One sentence explanation"}}"""
         message = client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=250,
@@ -205,7 +186,6 @@ Respond ONLY with valid JSON, no markdown, no explanation outside the JSON:
             if raw.startswith("json"):
                 raw = raw[4:]
         raw = raw.strip()
-        print(f"[StockPulse] AI qty raw: {raw[:100]}")
         data = json.loads(raw)
         return data
     except Exception as e:
@@ -221,8 +201,7 @@ def send_email(subject, html_content):
             if not to_email:
                 continue
             message = Mail(from_email=SENDGRID_FROM_EMAIL, to_emails=to_email, subject=subject, html_content=html_content)
-            sg = SendGridAPIClient(SENDGRID_API_KEY)
-            sg.send(message)
+            SendGridAPIClient(SENDGRID_API_KEY).send(message)
             print(f"[StockPulse] Email sent to {to_email}")
     except Exception as e:
         print(f"[StockPulse] Email error: {e}")
@@ -233,98 +212,73 @@ def build_low_stock_email(product, forecast=None):
     emoji = "🔴" if status == "critical" else "🟡"
     status_label = "Critical Stock Alert" if status == "critical" else "Low Stock Alert"
     location_rows = "".join([
-        f"<tr><td style='padding:8px 0;color:rgba(255,255,255,0.45);font-size:12px;'>{loc['location']}</td><td style='padding:8px 0;text-align:right;'><span style='font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);'>{loc['quantity']}</span></td></tr>"
+        f"<tr><td style='padding:8px 0;color:rgba(255,255,255,0.45);font-size:12px;'>{loc['location']}</td><td style='padding:8px 0;text-align:right;color:rgba(255,255,255,0.65);font-size:12px;font-weight:500;'>{loc['quantity']}</td></tr>"
         for loc in product["locations"]
     ])
-    ai_section = ""
-    if forecast:
-        ai_section = f"""<tr><td style="padding:0 28px 20px;">
-            <div style="background:rgba(100,200,220,0.08);border:0.5px solid rgba(100,200,220,0.2);border-radius:10px;padding:14px 16px;">
-                <div style="font-size:8px;color:rgba(100,200,220,0.6);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;">⚡ AI Forecast</div>
-                <div style="font-size:13px;color:rgba(255,255,255,0.75);line-height:1.6;">{forecast}</div>
-            </div>
-        </td></tr>"""
-    return f"""<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:18px 28px;border-bottom:0.5px solid rgba(255,255,255,0.06);">
-                <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                    <td style="font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:4px;text-transform:uppercase;">StockPulse</td>
-                    <td style="text-align:right;font-size:9px;color:rgba(255,255,255,0.22);letter-spacing:2px;text-transform:uppercase;">Harlow &amp; Co.</td>
-                </tr></table>
-            </td></tr>
-            <tr><td style="padding:36px 28px 28px;text-align:center;">
-                <div style="font-size:44px;margin-bottom:14px;">{emoji}</div>
-                <div style="font-size:22px;font-weight:500;color:rgba(255,255,255,0.92);margin-bottom:6px;">{status_label}</div>
-                <div style="font-size:12px;color:rgba(255,255,255,0.32);letter-spacing:1px;">{product['title']} &middot; {product['sku']}</div>
-            </td></tr>
-            <tr><td style="padding:0 28px 20px;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;">
-                    <tr><td style="padding:10px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);"><span style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:2px;text-transform:uppercase;">Inventory Summary</span></td></tr>
-                    <tr><td><table width="100%" cellpadding="0" cellspacing="0"><tr>
-                        <td width="33%" style="padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Total Stock</div><div style="font-size:24px;font-weight:500;color:{color};">{product['inventory']}</div></td>
-                        <td width="33%" style="padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Threshold</div><div style="font-size:24px;font-weight:500;color:rgba(255,255,255,0.35);">{product['threshold']}</div></td>
-                        <td width="33%" style="padding:16px;"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Status</div><div style="font-size:13px;font-weight:500;color:{color};text-transform:uppercase;">{status}</div></td>
-                    </tr></table></td></tr>
-                </table>
-            </td></tr>
-            <tr><td style="padding:0 28px 20px;">
-                <div style="font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">By Location</div>
-                <table width="100%" cellpadding="0" cellspacing="0">{location_rows}</table>
-            </td></tr>
-            {ai_section}
-            <tr><td style="padding:0 28px 28px;">
-                <div style="background:{color}12;border:0.5px solid {color}30;border-radius:10px;padding:14px;text-align:center;">
-                    <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:{color};">Log into StockPulse to trigger a reorder</span>
-                </div>
-            </td></tr>
-            <tr><td style="padding:14px 28px;border-top:0.5px solid rgba(255,255,255,0.05);text-align:center;">
-                <span style="font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:1.5px;text-transform:uppercase;">StockPulse &middot; Inventory Automation &middot; 2026</span>
-            </td></tr>
-        </table>
-    </div>"""
+    ai_section = f"""<tr><td style='padding:0 28px 20px;'>
+        <div style='background:rgba(100,200,220,0.08);border:0.5px solid rgba(100,200,220,0.2);border-radius:10px;padding:14px 16px;'>
+        <div style='font-size:8px;color:rgba(100,200,220,0.6);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;'>AI Forecast</div>
+        <div style='font-size:13px;color:rgba(255,255,255,0.75);line-height:1.6;'>{forecast}</div>
+        </div></td></tr>""" if forecast else ""
+    return f"""<div style='font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);'>
+    <table width='100%' cellpadding='0' cellspacing='0'>
+    <tr><td style='padding:18px 28px;border-bottom:0.5px solid rgba(255,255,255,0.06);'>
+    <span style='font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:4px;text-transform:uppercase;'>StockPulse</span>
+    </td></tr>
+    <tr><td style='padding:36px 28px 28px;text-align:center;'>
+    <div style='font-size:44px;margin-bottom:14px;'>{emoji}</div>
+    <div style='font-size:22px;font-weight:500;color:rgba(255,255,255,0.92);margin-bottom:6px;'>{status_label}</div>
+    <div style='font-size:12px;color:rgba(255,255,255,0.32);'>{product['title']} - {product['sku']}</div>
+    </td></tr>
+    <tr><td style='padding:0 28px 20px;'>
+    <table width='100%' cellpadding='0' cellspacing='0' style='background:rgba(255,255,255,0.04);border-radius:12px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);'>
+    <tr><td style='padding:10px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:2px;text-transform:uppercase;'>Inventory Summary</td></tr>
+    <tr><td><table width='100%' cellpadding='0' cellspacing='0'><tr>
+    <td width='33%' style='padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>Total Stock</div><div style='font-size:24px;font-weight:500;color:{color};'>{product['inventory']}</div></td>
+    <td width='33%' style='padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>Threshold</div><div style='font-size:24px;font-weight:500;color:rgba(255,255,255,0.35);'>{product['threshold']}</div></td>
+    <td width='33%' style='padding:16px;'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>Status</div><div style='font-size:13px;font-weight:500;color:{color};text-transform:uppercase;'>{status}</div></td>
+    </tr></table></td></tr></table></td></tr>
+    <tr><td style='padding:0 28px 20px;'>
+    <div style='font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;'>By Location</div>
+    <table width='100%' cellpadding='0' cellspacing='0'>{location_rows}</table>
+    </td></tr>
+    {ai_section}
+    <tr><td style='padding:14px 28px;border-top:0.5px solid rgba(255,255,255,0.05);text-align:center;'>
+    <span style='font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:1.5px;text-transform:uppercase;'>StockPulse - Inventory Automation - 2026</span>
+    </td></tr>
+    </table></div>"""
 
 def build_reorder_email(product):
     location_rows = "".join([
-        f"<tr><td style='padding:8px 0;color:rgba(255,255,255,0.45);font-size:12px;'>{loc['location']}</td><td style='padding:8px 0;text-align:right;'><span style='font-size:12px;font-weight:500;color:rgba(255,255,255,0.65);'>{loc['quantity']}</span></td></tr>"
+        f"<tr><td style='padding:8px 0;color:rgba(255,255,255,0.45);font-size:12px;'>{loc['location']}</td><td style='padding:8px 0;text-align:right;color:rgba(255,255,255,0.65);font-size:12px;font-weight:500;'>{loc['quantity']}</td></tr>"
         for loc in product["locations"]
     ])
-    return f"""<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);">
-        <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="padding:18px 28px;border-bottom:0.5px solid rgba(255,255,255,0.06);">
-                <table width="100%" cellpadding="0" cellspacing="0"><tr>
-                    <td style="font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:4px;text-transform:uppercase;">StockPulse</td>
-                    <td style="text-align:right;font-size:9px;color:rgba(255,255,255,0.22);letter-spacing:2px;text-transform:uppercase;">Harlow &amp; Co.</td>
-                </tr></table>
-            </td></tr>
-            <tr><td style="padding:36px 28px 28px;text-align:center;">
-                <div style="font-size:44px;margin-bottom:14px;">📦</div>
-                <div style="font-size:22px;font-weight:500;color:rgba(255,255,255,0.92);margin-bottom:6px;">Reorder Confirmed</div>
-                <div style="font-size:12px;color:rgba(255,255,255,0.32);letter-spacing:1px;">{product['title']} &middot; {product['sku']}</div>
-            </td></tr>
-            <tr><td style="padding:0 28px 20px;">
-                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;">
-                    <tr><td style="padding:10px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);"><span style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:2px;text-transform:uppercase;">Reorder Summary</span></td></tr>
-                    <tr><td><table width="100%" cellpadding="0" cellspacing="0"><tr>
-                        <td width="33%" style="padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">Current Stock</div><div style="font-size:24px;font-weight:500;color:#818cf8;">{product['inventory']}</div></td>
-                        <td width="33%" style="padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">SKU</div><div style="font-size:14px;font-weight:500;color:rgba(255,255,255,0.4);padding-top:4px;">{product['sku']}</div></td>
-                        <td width="33%" style="padding:16px;"><div style="font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">ETA</div><div style="font-size:13px;font-weight:500;color:#818cf8;padding-top:4px;">3-5 days</div></td>
-                    </tr></table></td></tr>
-                </table>
-            </td></tr>
-            <tr><td style="padding:0 28px 20px;">
-                <div style="font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;">By Location</div>
-                <table width="100%" cellpadding="0" cellspacing="0">{location_rows}</table>
-            </td></tr>
-            <tr><td style="padding:0 28px 28px;">
-                <div style="background:rgba(99,102,241,0.08);border:0.5px solid rgba(99,102,241,0.2);border-radius:10px;padding:14px;text-align:center;">
-                    <span style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#818cf8;">Supplier notified &middot; Restock in 3-5 business days</span>
-                </div>
-            </td></tr>
-            <tr><td style="padding:14px 28px;border-top:0.5px solid rgba(255,255,255,0.05);text-align:center;">
-                <span style="font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:1.5px;text-transform:uppercase;">StockPulse &middot; Inventory Automation &middot; 2026</span>
-            </td></tr>
-        </table>
-    </div>"""
+    return f"""<div style='font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);'>
+    <table width='100%' cellpadding='0' cellspacing='0'>
+    <tr><td style='padding:18px 28px;border-bottom:0.5px solid rgba(255,255,255,0.06);'>
+    <span style='font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:4px;text-transform:uppercase;'>StockPulse</span>
+    </td></tr>
+    <tr><td style='padding:36px 28px 28px;text-align:center;'>
+    <div style='font-size:44px;margin-bottom:14px;'>📦</div>
+    <div style='font-size:22px;font-weight:500;color:rgba(255,255,255,0.92);margin-bottom:6px;'>Reorder Confirmed</div>
+    <div style='font-size:12px;color:rgba(255,255,255,0.32);'>{product['title']} - {product['sku']}</div>
+    </td></tr>
+    <tr><td style='padding:0 28px 20px;'>
+    <table width='100%' cellpadding='0' cellspacing='0' style='background:rgba(255,255,255,0.04);border-radius:12px;overflow:hidden;border:0.5px solid rgba(255,255,255,0.08);'>
+    <tr><td style='padding:10px 16px;border-bottom:0.5px solid rgba(255,255,255,0.06);font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:2px;text-transform:uppercase;'>Reorder Summary</td></tr>
+    <tr><td><table width='100%' cellpadding='0' cellspacing='0'><tr>
+    <td width='33%' style='padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>Current Stock</div><div style='font-size:24px;font-weight:500;color:#818cf8;'>{product['inventory']}</div></td>
+    <td width='33%' style='padding:16px;border-right:0.5px solid rgba(255,255,255,0.06);'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>SKU</div><div style='font-size:14px;font-weight:500;color:rgba(255,255,255,0.4);padding-top:4px;'>{product['sku']}</div></td>
+    <td width='33%' style='padding:16px;'><div style='font-size:8px;color:rgba(255,255,255,0.28);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;'>ETA</div><div style='font-size:13px;font-weight:500;color:#818cf8;padding-top:4px;'>3-5 days</div></td>
+    </tr></table></td></tr></table></td></tr>
+    <tr><td style='padding:0 28px 20px;'>
+    <div style='font-size:8px;color:rgba(255,255,255,0.25);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;'>By Location</div>
+    <table width='100%' cellpadding='0' cellspacing='0'>{location_rows}</table>
+    </td></tr>
+    <tr><td style='padding:14px 28px;border-top:0.5px solid rgba(255,255,255,0.05);text-align:center;'>
+    <span style='font-size:9px;color:rgba(255,255,255,0.18);letter-spacing:1.5px;text-transform:uppercase;'>StockPulse - Inventory Automation - 2026</span>
+    </td></tr>
+    </table></div>"""
 
 def send_low_stock_alert(product):
     if not SLACK_LOW_STOCK_WEBHOOK:
@@ -333,30 +287,27 @@ def send_low_stock_alert(product):
     status = product["status"]
     emoji = "🔴" if status == "critical" else "🟡"
     color = "#ef4444" if status == "critical" else "#f97316"
-    location_text = "\n".join([f"• {loc['location']}: *{loc['quantity']} units*" for loc in product["locations"]])
+    location_text = "\n".join([f"- {loc['location']}: {loc['quantity']} units" for loc in product["locations"]])
     blocks = [
-        {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} Low Stock Alert -- {product['title']} dropped to {product['inventory']} units"}},
+        {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} Low Stock Alert -- {product['title']} at {product['inventory']} units"}},
         {"type": "section", "fields": [
             {"type": "mrkdwn", "text": f"*Product:*\n{product['title']}"},
             {"type": "mrkdwn", "text": f"*SKU:*\n{product['sku']}"},
             {"type": "mrkdwn", "text": f"*Total Stock:*\n{product['inventory']} units"},
             {"type": "mrkdwn", "text": f"*Threshold:*\n{product['threshold']} units"}
         ]},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Inventory by Location:*\n{location_text}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*By Location:*\n{location_text}"}},
     ]
     if forecast:
-        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*⚡ AI Forecast:*\n{forecast}"}})
-    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}})
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*AI Forecast:*\n{forecast}"}})
+    blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "Head to StockPulse to trigger a reorder."}})
     requests.post(SLACK_LOW_STOCK_WEBHOOK, json={"attachments": [{"color": color, "blocks": blocks}]})
-    send_email(
-        subject=f"🔴 StockPulse Alert — {product['title']} is {status.upper()}",
-        html_content=build_low_stock_email(product, forecast)
-    )
+    send_email(subject=f"StockPulse Alert -- {product['title']} is {status.upper()}", html_content=build_low_stock_email(product, forecast))
 
 def send_reorder_alert(product):
     if not SLACK_REORDER_WEBHOOK:
         return
-    location_text = "\n".join([f"• {loc['location']}: *{loc['quantity']} units*" for loc in product["locations"]])
+    location_text = "\n".join([f"- {loc['location']}: {loc['quantity']} units" for loc in product["locations"]])
     requests.post(SLACK_REORDER_WEBHOOK, json={"attachments": [{"color": "#6366f1", "blocks": [
         {"type": "header", "text": {"type": "plain_text", "text": f"📦 Reorder Triggered -- {product['title']}"}},
         {"type": "section", "fields": [
@@ -365,67 +316,35 @@ def send_reorder_alert(product):
             {"type": "mrkdwn", "text": f"*Current Stock:*\n{product['inventory']} units"},
             {"type": "mrkdwn", "text": f"*Threshold:*\n{product['threshold']} units"}
         ]},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Inventory by Location:*\n{location_text}"}},
-        {"type": "section", "text": {"type": "mrkdwn", "text": f"*Reorder triggered* for *{product['title']}*. Supplier notification sent."}}
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*By Location:*\n{location_text}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"Reorder triggered for {product['title']}. Supplier notification sent."}}
     ]}]})
-    send_email(
-        subject=f"📦 StockPulse — Reorder Triggered for {product['title']}",
-        html_content=build_reorder_email(product)
-    )
+    send_email(subject=f"StockPulse -- Reorder Triggered for {product['title']}", html_content=build_reorder_email(product))
 
 def fetch_products_with_variants():
     settings = load_settings()
-    products_data = requests.get(
-        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250",
-        headers=HEADERS
-    ).json()
-    locations_data = requests.get(
-        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
-        headers=HEADERS
-    ).json()
+    products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
+    locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
     locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
     results = []
-
     for product in products_data.get("products", []):
         for variant in product["variants"]:
             sku = variant["sku"] or f"VAR-{variant['id']}"
             display_title = build_display_title(product["title"], variant["title"])
             settings = ensure_product_in_settings(settings, sku)
             threshold = settings["products"][sku].get("threshold", 10)
-
-            inv_data = requests.get(
-                f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}",
-                headers=HEADERS
-            ).json()
-
+            inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
             location_breakdown = []
             total_inventory = 0
             for level in inv_data.get("inventory_levels", []):
                 qty = level["available"] or 0
                 total_inventory += qty
-                location_breakdown.append({
-                    "location": locations.get(level["location_id"], "Unknown"),
-                    "quantity": qty
-                })
-
-            results.append({
-                "id": variant["id"],
-                "product_id": product["id"],
-                "title": display_title,
-                "sku": sku,
-                "inventory": total_inventory,
-                "threshold": threshold,
-                "status": get_status(total_inventory, threshold),
-                "locations": location_breakdown
-            })
-
+                location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
+            results.append({"id": variant["id"], "product_id": product["id"], "title": display_title, "sku": sku, "inventory": total_inventory, "threshold": threshold, "status": get_status(total_inventory, threshold), "locations": location_breakdown})
     return results
 
 def find_variant_by_id(variant_id):
-    products_data = requests.get(
-        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250",
-        headers=HEADERS
-    ).json()
+    products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
     for product in products_data.get("products", []):
         for variant in product["variants"]:
             if variant["id"] == variant_id:
@@ -436,29 +355,14 @@ def build_product_payload(product, variant, settings, locations):
     sku = variant["sku"] or f"VAR-{variant['id']}"
     display_title = build_display_title(product["title"], variant["title"])
     threshold = settings["products"].get(sku, {}).get("threshold", 10)
-    inv_data = requests.get(
-        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}",
-        headers=HEADERS
-    ).json()
+    inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
     location_breakdown = []
     total_inventory = 0
     for level in inv_data.get("inventory_levels", []):
         qty = level["available"] or 0
         total_inventory += qty
-        location_breakdown.append({
-            "location": locations.get(level["location_id"], "Unknown"),
-            "quantity": qty
-        })
-    return {
-        "id": variant["id"],
-        "product_id": product["id"],
-        "title": display_title,
-        "sku": sku,
-        "inventory": total_inventory,
-        "threshold": threshold,
-        "status": get_status(total_inventory, threshold),
-        "locations": location_breakdown
-    }
+        location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
+    return {"id": variant["id"], "product_id": product["id"], "title": display_title, "sku": sku, "inventory": total_inventory, "threshold": threshold, "status": get_status(total_inventory, threshold), "locations": location_breakdown}
 
 def fetch_inventory():
     try:
@@ -475,14 +379,14 @@ def fetch_inventory():
         print(f"[StockPulse] Polling error: {e}")
 
 def start_polling():
-    print(f"[StockPulse] Starting inventory polling every {POLL_INTERVAL} seconds...")
+    print(f"[StockPulse] Starting polling every {POLL_INTERVAL} seconds...")
     while True:
         fetch_inventory()
         time.sleep(POLL_INTERVAL)
 
 @app.route("/api/health")
 def health():
-    return jsonify({"status": "ok", "message": "StockPulse API is running"})
+    return jsonify({"status": "ok"})
 
 @app.route("/api/inventory")
 def get_inventory():
@@ -496,10 +400,7 @@ def get_inventory():
 def get_forecast(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(
-            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
-            headers=HEADERS
-        ).json()
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
         product, variant = find_variant_by_id(variant_id)
         if not variant:
@@ -517,10 +418,7 @@ def get_forecast(variant_id):
 def get_forecast_qty(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(
-            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
-            headers=HEADERS
-        ).json()
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
         product, variant = find_variant_by_id(variant_id)
         if not variant:
@@ -546,16 +444,13 @@ def get_settings():
 def update_settings():
     data = request.get_json()
     save_settings_to_file(data)
-    return jsonify({"success": True, "message": "Settings saved"})
+    return jsonify({"success": True})
 
 @app.route("/api/reorder/<int:variant_id>", methods=["POST"])
 def trigger_reorder(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(
-            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
-            headers=HEADERS
-        ).json()
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
         product, variant = find_variant_by_id(variant_id)
         if not variant:
@@ -577,11 +472,7 @@ def trigger_reorder(variant_id):
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "status": payload["status"]
         })
-        return jsonify({
-            "success": True,
-            "message": f"Reorder triggered for {payload['title']}.",
-            "product": payload
-        })
+        return jsonify({"success": True, "message": f"Reorder triggered for {payload['title']}.", "product": payload})
     except Exception as e:
         print(f"[StockPulse] Reorder error: {type(e).__name__}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -602,24 +493,16 @@ def send_purchase_order(variant_id):
         lead_time = ps.get("lead_time", "5-7 days")
         if not supplier_email:
             return jsonify({"success": False, "message": "No supplier email configured"}), 400
-        po_html = f"""<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;padding:28px;border:0.5px solid rgba(255,255,255,0.08);">
-            <p style="color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:3px;text-transform:uppercase;">StockPulse &middot; Purchase Order</p>
-            <h2 style="color:rgba(255,255,255,0.9);margin:12px 0;">PO Request — {display_title}</h2>
-            <p style="color:rgba(255,255,255,0.6);font-size:13px;">SKU: {sku} &middot; Qty: {reorder_qty} units &middot; Lead Time: {lead_time}</p>
-            <p style="color:rgba(255,255,255,0.6);font-size:13px;">Supplier: {supplier_name}</p>
-            <p style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:20px;">Please confirm receipt and expected ship date. &mdash; Harlow &amp; Co. Operations</p>
+        po_html = f"""<div style='font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;padding:28px;'>
+            <p style='color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:3px;text-transform:uppercase;'>StockPulse - Purchase Order</p>
+            <h2 style='color:rgba(255,255,255,0.9);margin:12px 0;'>PO Request -- {display_title}</h2>
+            <p style='color:rgba(255,255,255,0.6);font-size:13px;'>SKU: {sku} - Qty: {reorder_qty} units - Lead Time: {lead_time}</p>
+            <p style='color:rgba(255,255,255,0.6);font-size:13px;'>Supplier: {supplier_name}</p>
+            <p style='color:rgba(255,255,255,0.4);font-size:11px;margin-top:20px;'>Please confirm receipt and expected ship date. -- Harlow and Co. Operations</p>
         </div>"""
-        send_email(
-            subject=f"📋 PO Sent — {display_title} ({reorder_qty} units)",
-            html_content=po_html
-        )
+        send_email(subject=f"PO Sent -- {display_title} ({reorder_qty} units)", html_content=po_html)
         try:
-            msg = Mail(
-                from_email=SENDGRID_FROM_EMAIL,
-                to_emails=supplier_email,
-                subject=f"PO Request from Harlow & Co. — {display_title} ({reorder_qty} units)",
-                html_content=po_html
-            )
+            msg = Mail(from_email=SENDGRID_FROM_EMAIL, to_emails=supplier_email, subject=f"PO Request from Harlow and Co. -- {display_title} ({reorder_qty} units)", html_content=po_html)
             SendGridAPIClient(SENDGRID_API_KEY).send(msg)
         except Exception as e:
             print(f"[StockPulse] PO email error: {e}")
