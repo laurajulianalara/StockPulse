@@ -33,14 +33,12 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
   const [poMessage, setPoMessage] = useState(
     `Dear ${ps.supplier_name || "Supplier"},\n\nWe would like to place a reorder for the following product due to low inventory levels.\n\nPlease confirm receipt and expected ship date.\n\nThank you,\nHarlow & Co. Operations Team`
   )
-
   const totalQty = Object.values(qtyPerWarehouse).reduce((a, b) => a + (parseInt(b) || 0), 0)
   const color = product.status === "critical" ? "#ef4444" : "#f97316"
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
-
         <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
@@ -48,10 +46,7 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 32, height: 32, color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-
         <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-
-          {/* Product info */}
           <div style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${color}30`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
               <div>
@@ -66,8 +61,6 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
               <div><div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>Total to Order</div><div style={{ color: "rgba(100,200,220,0.9)", fontSize: 22, fontWeight: 500 }}>{totalQty}</div></div>
             </div>
           </div>
-
-          {/* Qty per warehouse */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Quantity to Order Per Warehouse</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -79,20 +72,12 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Order qty:</div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={qtyPerWarehouse[loc.location] || ""}
-                      onChange={e => setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))}
-                      style={{ width: 64, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(255,255,255,0.15)", borderRadius: 7, padding: "6px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
-                    />
+                    <input type="number" min="0" value={qtyPerWarehouse[loc.location] || ""} onChange={e => setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))} style={{ width: 64, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(255,255,255,0.15)", borderRadius: 7, padding: "6px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Supplier info */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Supplier Information</div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
@@ -110,33 +95,19 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
                   <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12 }}>{ps.lead_time || "—"}</div>
                 </div>
                 <div style={{ padding: "12px 16px" }}>
-                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Units to Order</div>
+                  <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Units</div>
                   <div style={{ color: "rgba(100,200,220,0.9)", fontSize: 12, fontWeight: 500 }}>{totalQty} units</div>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* PO message */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Message to Include in PO</div>
-            <textarea
-              value={poMessage}
-              onChange={e => setPoMessage(e.target.value)}
-              rows={5}
-              style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }}
-            />
+            <textarea value={poMessage} onChange={e => setPoMessage(e.target.value)} rows={5} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }} />
           </div>
-
-          {/* Buttons */}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
-              Cancel
-            </button>
-            <button
-              onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)}
-              disabled={sending}
-              style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: sending ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
+            <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
+            <button onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)} disabled={sending} style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: sending ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
               {sending ? "⏳ Sending Reorder..." : success ? "✅ Reorder Sent!" : "⚡ Confirm & Send Reorder"}
             </button>
           </div>
@@ -199,7 +170,7 @@ function App() {
         const isLowOrCritical = product && (product.status === "low" || product.status === "critical")
         updatedProducts[sku] = {
           ...prev.products[sku],
-          auto_send: isLowOrCritical ? newValue : prev.products[sku].auto_send
+          auto_send: isLowOrCritical ? newValue : false
         }
       })
       return { ...prev, auto_reorder_enabled: newValue, products: updatedProducts }
@@ -240,10 +211,7 @@ function App() {
       const data = await res.json()
       if (data.success) {
         setModalSuccess(true)
-        setTimeout(() => {
-          setModalSuccess(false)
-          setModalProduct(null)
-        }, 2500)
+        setTimeout(() => { setModalSuccess(false); setModalProduct(null) }, 2500)
       }
     } catch (err) {
       console.error("Reorder failed", err)
@@ -260,10 +228,7 @@ function App() {
   const updateProductSetting = (sku, field, value) => {
     setSettings(prev => ({
       ...prev,
-      products: {
-        ...prev.products,
-        [sku]: { ...prev.products[sku], [field]: value }
-      }
+      products: { ...prev.products, [sku]: { ...prev.products[sku], [field]: value } }
     }))
   }
 
@@ -410,18 +375,9 @@ function App() {
                     <div style={{ fontSize: 9, color: "rgba(100,180,200,0.55)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Demo Access Password</div>
                     <div style={{ fontSize: 22, color: "rgba(100,180,200,0.95)", fontWeight: 600, letterSpacing: 10 }}>0000</div>
                   </div>
-                  <input
-                    type="password"
-                    placeholder="Enter password"
-                    value={passwordInput}
-                    onChange={e => setPasswordInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handlePassword()}
-                    style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: `0.5px solid ${passwordError ? "#ef4444" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: "10px 14px", color: "rgba(255,255,255,0.8)", fontSize: 13, outline: "none", marginBottom: passwordError ? 8 : 16, textAlign: "center", letterSpacing: 4 }}
-                  />
+                  <input type="password" placeholder="Enter password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handlePassword()} style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: `0.5px solid ${passwordError ? "#ef4444" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, padding: "10px 14px", color: "rgba(255,255,255,0.8)", fontSize: 13, outline: "none", marginBottom: passwordError ? 8 : 16, textAlign: "center", letterSpacing: 4 }} />
                   {passwordError && <div style={{ color: "#ef4444", fontSize: 11, marginBottom: 12 }}>Incorrect password</div>}
-                  <button onClick={handlePassword} style={{ width: "100%", background: "rgba(100,180,200,0.1)", border: "0.5px solid rgba(100,180,200,0.25)", borderRadius: 8, padding: "10px", color: "rgba(100,180,200,0.85)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
-                    Unlock
-                  </button>
+                  <button onClick={handlePassword} style={{ width: "100%", background: "rgba(100,180,200,0.1)", border: "0.5px solid rgba(100,180,200,0.25)", borderRadius: 8, padding: "10px", color: "rgba(100,180,200,0.85)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Unlock</button>
                 </div>
               </div>
             ) : (
@@ -429,7 +385,7 @@ function App() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
                   <div>
                     <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Reorder Rules</div>
-                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>Configure reorder quantities, thresholds, supplier details and trigger reorders</div>
+                    <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>Configure reorder quantities, thresholds, and supplier details</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: "5px 12px" }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
@@ -446,12 +402,11 @@ function App() {
                       </div>
                       <div>
                         <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 2 }}>Auto-Reorder on Low Stock</div>
-                        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>When enabled, POs fire automatically when any product turns yellow — no manual trigger needed</div>
+                        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Automatically enables reorder for all critical and low stock products only</div>
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div onClick={handleGlobalToggle}
-                        style={{ width: 42, height: 24, borderRadius: 100, background: settings.auto_reorder_enabled ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.08)", border: `0.5px solid ${settings.auto_reorder_enabled ? "rgba(249,115,22,0.5)" : "rgba(255,255,255,0.12)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
+                      <div onClick={handleGlobalToggle} style={{ width: 42, height: 24, borderRadius: 100, background: settings.auto_reorder_enabled ? "rgba(249,115,22,0.3)" : "rgba(255,255,255,0.08)", border: `0.5px solid ${settings.auto_reorder_enabled ? "rgba(249,115,22,0.5)" : "rgba(255,255,255,0.12)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
                         <div style={{ position: "absolute", width: 16, height: 16, borderRadius: "50%", background: settings.auto_reorder_enabled ? "#f97316" : "rgba(255,255,255,0.4)", top: 3, left: settings.auto_reorder_enabled ? 22 : 4, transition: "all 0.3s" }}></div>
                       </div>
                       <span style={{ fontSize: 9, color: settings.auto_reorder_enabled ? "#f97316" : "rgba(255,255,255,0.3)", letterSpacing: 1.5, textTransform: "uppercase" }}>
@@ -474,14 +429,7 @@ function App() {
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <input
-                        type="number"
-                        min="1"
-                        value={settings.global_reorder_qty || ""}
-                        onChange={e => handleGlobalQtyChange(e.target.value)}
-                        placeholder="e.g. 50"
-                        style={{ width: 80, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(99,102,241,0.3)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
-                      />
+                      <input type="number" min="1" value={settings.global_reorder_qty || ""} onChange={e => handleGlobalQtyChange(e.target.value)} placeholder="e.g. 50" style={{ width: 80, background: "rgba(255,255,255,0.07)", border: "0.5px solid rgba(99,102,241,0.3)", borderRadius: 8, padding: "7px 10px", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }} />
                       <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: 1, textTransform: "uppercase" }}>units</span>
                     </div>
                   </div>
@@ -510,6 +458,7 @@ function App() {
                         <tbody>
                           {adminFiltered.map((product, i) => {
                             const ps = settings.products[product.sku] || {}
+                            const isActionable = product.status === "critical" || product.status === "low"
                             return (
                               <tr key={product.id} style={{ borderTop: i === 0 ? "none" : "0.5px solid rgba(255,255,255,0.05)" }}>
                                 <td style={{ padding: "12px" }}>
@@ -534,19 +483,27 @@ function App() {
                                 <td style={{ padding: "12px" }}>
                                   <input value={ps.lead_time || ""} onChange={e => updateProductSetting(product.sku, "lead_time", e.target.value)} style={{ width: 70, background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "5px 8px", color: "rgba(255,255,255,0.7)", fontSize: 11, outline: "none" }} />
                                 </td>
+
+                                {/* Auto-Send toggle — only for critical and low */}
                                 <td style={{ padding: "12px" }}>
-                                  <div onClick={() => updateProductSetting(product.sku, "auto_send", !ps.auto_send)}
-                                    style={{ width: 36, height: 20, borderRadius: 100, background: ps.auto_send ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${ps.auto_send ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
-                                    <div style={{ position: "absolute", width: 14, height: 14, borderRadius: "50%", background: ps.auto_send ? "#f97316" : "rgba(255,255,255,0.35)", top: 2.5, left: ps.auto_send ? 18 : 3, transition: "all 0.3s" }}></div>
-                                  </div>
+                                  {isActionable ? (
+                                    <div onClick={() => updateProductSetting(product.sku, "auto_send", !ps.auto_send)}
+                                      style={{ width: 36, height: 20, borderRadius: 100, background: ps.auto_send ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${ps.auto_send ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
+                                      <div style={{ position: "absolute", width: 14, height: 14, borderRadius: "50%", background: ps.auto_send ? "#f97316" : "rgba(255,255,255,0.35)", top: 2.5, left: ps.auto_send ? 18 : 3, transition: "all 0.3s" }}></div>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", letterSpacing: 1 }}>—</span>
+                                  )}
                                 </td>
+
+                                {/* Trigger Reorder button — only for critical and low */}
                                 <td style={{ padding: "12px" }}>
-                                  {product.status !== "ok" && (
-                                    <button
-                                      onClick={() => setModalProduct(product)}
-                                      style={{ background: statusColor(product.status) + "25", border: `1px solid ${statusColor(product.status)}60`, borderRadius: 7, padding: "7px 12px", color: statusColor(product.status), fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
+                                  {isActionable ? (
+                                    <button onClick={() => setModalProduct(product)} style={{ background: statusColor(product.status) + "25", border: `1px solid ${statusColor(product.status)}60`, borderRadius: 7, padding: "7px 12px", color: statusColor(product.status), fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", whiteSpace: "nowrap" }}>
                                       ⚡ Reorder
                                     </button>
+                                  ) : (
+                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.15)", letterSpacing: 1 }}>—</span>
                                   )}
                                 </td>
                               </tr>
