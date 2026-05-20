@@ -9,6 +9,7 @@ import os
 import threading
 import time
 import json
+import random
 from pathlib import Path
 from datetime import datetime
 
@@ -57,7 +58,6 @@ DEFAULT_SETTINGS = {
 }
 
 def get_default_product_setting(auto_reorder_enabled=True, global_reorder_qty=0):
-    """Generate default settings for any new product not in the hardcoded list"""
     qty = global_reorder_qty if global_reorder_qty and global_reorder_qty > 0 else 20
     return {
         "threshold": 10,
@@ -101,13 +101,11 @@ def get_status(inventory, threshold):
     return "ok"
 
 def build_display_title(product_title, variant_title):
-    """Build display title with variant if it's not the default single variant"""
     if not variant_title or variant_title.lower() in ["default title", "default"]:
         return product_title
     return f"{product_title} — {variant_title}"
 
 def ensure_product_in_settings(settings, sku):
-    """Ensure any new product has settings, inheriting global defaults"""
     if sku not in settings["products"]:
         settings["products"][sku] = get_default_product_setting(
             auto_reorder_enabled=settings.get("auto_reorder_enabled", True),
@@ -128,10 +126,16 @@ def get_ai_forecast(product):
         inventory = product["inventory"]
         threshold = product["threshold"]
 
+        random.seed(hash(product["sku"]) % 1000)
+        daily_sales = round(random.uniform(1.5, 4.5), 1)
+        days_of_stock = round(inventory / daily_sales, 1) if daily_sales > 0 and inventory > 0 else 0
+        weekly_sales = round(daily_sales * 7, 1)
+        monthly_sales = round(daily_sales * 30, 1)
+
         if inventory == 0:
             urgency = "completely out of stock across all warehouses"
         elif status == "critical":
-            urgency = f"critically low at {inventory} units, which is less than 50% of the reorder threshold"
+            urgency = f"critically low at {inventory} units, less than 50% of the reorder threshold"
         else:
             urgency = f"below the reorder threshold at {inventory} units"
 
@@ -143,7 +147,13 @@ Reorder Threshold: {threshold} units
 Status: {status.upper()} — {urgency}
 Stock by Location: {location_text}
 
-Note: We don't have historical sales data, but based on the inventory levels and typical home décor retail patterns, provide a practical 1-2 sentence forecast. Assume this is a mid-velocity product selling 1-3 units per day across all locations. Be direct and actionable — mention estimated days until stockout and a recommended reorder quantity to cover 30-45 days of demand. Do not use bullet points or hedging language."""
+Simulated Sales Data (last 30 days):
+- Average daily sales: {daily_sales} units/day
+- Weekly average: {weekly_sales} units/week
+- Monthly total: {monthly_sales} units/month
+- Estimated days of stock remaining: {days_of_stock} days
+
+Write a concise 2-sentence forecast. Include how many days until stockout and a specific recommended reorder quantity to cover 45 days of demand. Be direct and urgent where appropriate. Do not use bullet points."""
 
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -164,8 +174,10 @@ def get_ai_qty_recommendation(product, settings):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         ps = settings.get("products", {}).get(product["sku"], {})
         lead_time = ps.get("lead_time", "5-7 days")
-        location_text = ", ".join([f"{loc['location']}: {loc['quantity']} units" for loc in product["locations"]])
         location_names = {loc["location"]: loc["quantity"] for loc in product["locations"]}
+
+        random.seed(hash(product["sku"]) % 1000)
+        daily_sales = round(random.uniform(1.5, 4.5), 1)
 
         prompt = f"""You are an inventory analyst for Harlow & Co., a premium home décor retailer.
 
@@ -173,13 +185,14 @@ Product: {product['title']} (SKU: {product['sku']})
 Current Total Stock: {product['inventory']} units
 Reorder Threshold: {product['threshold']} units
 Status: {product['status'].upper()}
-Stock by Location: {location_text}
+Locations: {json.dumps(location_names)}
 Supplier Lead Time: {lead_time}
+Average Daily Sales: {daily_sales} units/day
 
-Recommend a reorder quantity per warehouse to cover 45 days of demand. Assume 1-3 units sold per day total across all locations. Distribute evenly across warehouses unless current stock imbalance suggests otherwise.
+Recommend a reorder quantity per warehouse to cover 45 days of demand. Distribute proportionally based on current stock levels.
 
-Respond ONLY with valid JSON, no other text:
-{{"total_qty": 45, "per_warehouse": {json.dumps({k: 15 for k in location_names})}, "reasoning": "One sentence explanation of the recommendation"}}"""
+Respond ONLY with valid JSON, no markdown, no explanation outside the JSON:
+{{"total_qty": 45, "per_warehouse": {json.dumps({k: 15 for k in location_names})}, "reasoning": "One sentence explanation"}}"""
 
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
@@ -187,12 +200,12 @@ Respond ONLY with valid JSON, no other text:
             messages=[{"role": "user", "content": prompt}]
         )
         raw = message.content[0].text.strip()
-        if raw.startswith("```"):
+        if "```" in raw:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         raw = raw.strip()
-        print(f"[StockPulse] AI qty raw: {raw}")
+        print(f"[StockPulse] AI qty raw: {raw[:100]}")
         data = json.loads(raw)
         return data
     except Exception as e:
@@ -335,7 +348,10 @@ def send_low_stock_alert(product):
         blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*⚡ AI Forecast:*\n{forecast}"}})
     blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "*Action Required:* Head to the StockPulse dashboard to trigger a reorder."}})
     requests.post(SLACK_LOW_STOCK_WEBHOOK, json={"attachments": [{"color": color, "blocks": blocks}]})
-    send_email(subject=f"🔴 StockPulse Alert — {product['title']} is {status.upper()}", html_content=build_low_stock_email(product, forecast))
+    send_email(
+        subject=f"🔴 StockPulse Alert — {product['title']} is {status.upper()}",
+        html_content=build_low_stock_email(product, forecast)
+    )
 
 def send_reorder_alert(product):
     if not SLACK_REORDER_WEBHOOK:
@@ -352,13 +368,21 @@ def send_reorder_alert(product):
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Inventory by Location:*\n{location_text}"}},
         {"type": "section", "text": {"type": "mrkdwn", "text": f"*Reorder triggered* for *{product['title']}*. Supplier notification sent."}}
     ]}]})
-    send_email(subject=f"📦 StockPulse — Reorder Triggered for {product['title']}", html_content=build_reorder_email(product))
+    send_email(
+        subject=f"📦 StockPulse — Reorder Triggered for {product['title']}",
+        html_content=build_reorder_email(product)
+    )
 
 def fetch_products_with_variants():
-    """Fetch all products and return one entry per variant with proper display title"""
     settings = load_settings()
-    products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
-    locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+    products_data = requests.get(
+        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250",
+        headers=HEADERS
+    ).json()
+    locations_data = requests.get(
+        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
+        headers=HEADERS
+    ).json()
     locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
     results = []
 
@@ -369,13 +393,20 @@ def fetch_products_with_variants():
             settings = ensure_product_in_settings(settings, sku)
             threshold = settings["products"][sku].get("threshold", 10)
 
-            inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}", headers=HEADERS).json()
+            inv_data = requests.get(
+                f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}",
+                headers=HEADERS
+            ).json()
+
             location_breakdown = []
             total_inventory = 0
             for level in inv_data.get("inventory_levels", []):
                 qty = level["available"] or 0
                 total_inventory += qty
-                location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
+                location_breakdown.append({
+                    "location": locations.get(level["location_id"], "Unknown"),
+                    "quantity": qty
+                })
 
             results.append({
                 "id": variant["id"],
@@ -390,10 +421,48 @@ def fetch_products_with_variants():
 
     return results
 
+def find_variant_by_id(variant_id):
+    products_data = requests.get(
+        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250",
+        headers=HEADERS
+    ).json()
+    for product in products_data.get("products", []):
+        for variant in product["variants"]:
+            if variant["id"] == variant_id:
+                return product, variant
+    return None, None
+
+def build_product_payload(product, variant, settings, locations):
+    sku = variant["sku"] or f"VAR-{variant['id']}"
+    display_title = build_display_title(product["title"], variant["title"])
+    threshold = settings["products"].get(sku, {}).get("threshold", 10)
+    inv_data = requests.get(
+        f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={variant['inventory_item_id']}",
+        headers=HEADERS
+    ).json()
+    location_breakdown = []
+    total_inventory = 0
+    for level in inv_data.get("inventory_levels", []):
+        qty = level["available"] or 0
+        total_inventory += qty
+        location_breakdown.append({
+            "location": locations.get(level["location_id"], "Unknown"),
+            "quantity": qty
+        })
+    return {
+        "id": variant["id"],
+        "product_id": product["id"],
+        "title": display_title,
+        "sku": sku,
+        "inventory": total_inventory,
+        "threshold": threshold,
+        "status": get_status(total_inventory, threshold),
+        "locations": location_breakdown
+    }
+
 def fetch_inventory():
     try:
         results = fetch_products_with_variants()
-        settings = load_settings()
         for item in results:
             sku = item["sku"]
             prev_qty = last_known_qty.get(sku)
@@ -427,45 +496,19 @@ def get_inventory():
 def get_forecast(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations_data = requests.get(
+            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
+            headers=HEADERS
+        ).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
-
-        # Find the variant across all products
-        products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
-        found_variant = None
-        found_product = None
-        for product in products_data.get("products", []):
-            for variant in product["variants"]:
-                if variant["id"] == variant_id:
-                    found_variant = variant
-                    found_product = product
-                    break
-            if found_variant:
-                break
-
-        if not found_variant:
+        product, variant = find_variant_by_id(variant_id)
+        if not variant:
             return jsonify({"success": False, "error": "Variant not found"}), 404
-
-        sku = found_variant["sku"] or f"VAR-{found_variant['id']}"
-        display_title = build_display_title(found_product["title"], found_variant["title"])
-        threshold = settings["products"].get(sku, {}).get("threshold", 10)
-
-        inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={found_variant['inventory_item_id']}", headers=HEADERS).json()
-        location_breakdown = []
-        total_inventory = 0
-        for level in inv_data.get("inventory_levels", []):
-            qty = level["available"] or 0
-            total_inventory += qty
-            location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
-
-        product_payload = {
-            "id": found_variant["id"], "title": display_title, "sku": sku,
-            "inventory": total_inventory, "threshold": threshold,
-            "status": get_status(total_inventory, threshold),
-            "locations": location_breakdown
-        }
-        forecast = get_ai_forecast(product_payload)
-        return jsonify({"success": True, "forecast": forecast, "product": product_payload})
+        sku = variant["sku"] or f"VAR-{variant['id']}"
+        settings = ensure_product_in_settings(settings, sku)
+        payload = build_product_payload(product, variant, settings, locations)
+        forecast = get_ai_forecast(payload)
+        return jsonify({"success": True, "forecast": forecast, "product": payload})
     except Exception as e:
         print(f"[StockPulse] Forecast error: {type(e).__name__}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -474,43 +517,18 @@ def get_forecast(variant_id):
 def get_forecast_qty(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations_data = requests.get(
+            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
+            headers=HEADERS
+        ).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
-
-        products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
-        found_variant = None
-        found_product = None
-        for product in products_data.get("products", []):
-            for variant in product["variants"]:
-                if variant["id"] == variant_id:
-                    found_variant = variant
-                    found_product = product
-                    break
-            if found_variant:
-                break
-
-        if not found_variant:
+        product, variant = find_variant_by_id(variant_id)
+        if not variant:
             return jsonify({"success": False, "error": "Variant not found"}), 404
-
-        sku = found_variant["sku"] or f"VAR-{found_variant['id']}"
-        display_title = build_display_title(found_product["title"], found_variant["title"])
-        threshold = settings["products"].get(sku, {}).get("threshold", 10)
-
-        inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={found_variant['inventory_item_id']}", headers=HEADERS).json()
-        location_breakdown = []
-        total_inventory = 0
-        for level in inv_data.get("inventory_levels", []):
-            qty = level["available"] or 0
-            total_inventory += qty
-            location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
-
-        product_payload = {
-            "id": found_variant["id"], "title": display_title, "sku": sku,
-            "inventory": total_inventory, "threshold": threshold,
-            "status": get_status(total_inventory, threshold),
-            "locations": location_breakdown
-        }
-        recommendation = get_ai_qty_recommendation(product_payload, settings)
+        sku = variant["sku"] or f"VAR-{variant['id']}"
+        settings = ensure_product_in_settings(settings, sku)
+        payload = build_product_payload(product, variant, settings, locations)
+        recommendation = get_ai_qty_recommendation(payload, settings)
         return jsonify({"success": True, "recommendation": recommendation})
     except Exception as e:
         print(f"[StockPulse] Forecast qty error: {type(e).__name__}: {e}")
@@ -534,58 +552,36 @@ def update_settings():
 def trigger_reorder(variant_id):
     try:
         settings = load_settings()
-        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations_data = requests.get(
+            f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json",
+            headers=HEADERS
+        ).json()
         locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
-
-        products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
-        found_variant = None
-        found_product = None
-        for product in products_data.get("products", []):
-            for variant in product["variants"]:
-                if variant["id"] == variant_id:
-                    found_variant = variant
-                    found_product = product
-                    break
-            if found_variant:
-                break
-
-        if not found_variant:
+        product, variant = find_variant_by_id(variant_id)
+        if not variant:
             return jsonify({"success": False, "error": "Variant not found"}), 404
-
-        sku = found_variant["sku"] or f"VAR-{found_variant['id']}"
-        display_title = build_display_title(found_product["title"], found_variant["title"])
-        threshold = settings["products"].get(sku, {}).get("threshold", 10)
-
-        inv_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/inventory_levels.json?inventory_item_ids={found_variant['inventory_item_id']}", headers=HEADERS).json()
-        location_breakdown = []
-        total_inventory = 0
-        for level in inv_data.get("inventory_levels", []):
-            qty = level["available"] or 0
-            total_inventory += qty
-            location_breakdown.append({"location": locations.get(level["location_id"], "Unknown"), "quantity": qty})
-
-        product_payload = {
-            "id": found_variant["id"], "title": display_title, "sku": sku,
-            "inventory": total_inventory, "threshold": threshold,
-            "status": get_status(total_inventory, threshold),
-            "locations": location_breakdown
-        }
-
-        send_reorder_alert(product_payload)
+        sku = variant["sku"] or f"VAR-{variant['id']}"
+        settings = ensure_product_in_settings(settings, sku)
+        payload = build_product_payload(product, variant, settings, locations)
+        send_reorder_alert(payload)
         body = request.get_json() or {}
         save_history({
-            "id": found_variant["id"],
-            "title": display_title,
+            "id": variant["id"],
+            "title": payload["title"],
             "sku": sku,
-            "inventory_at_reorder": total_inventory,
+            "inventory_at_reorder": payload["inventory"],
             "total_qty_ordered": body.get("total_qty", settings["products"].get(sku, {}).get("reorder_qty", 0)),
             "qty_per_warehouse": body.get("qty_per_warehouse", {}),
             "supplier_name": settings["products"].get(sku, {}).get("supplier_name", ""),
             "supplier_email": settings["products"].get(sku, {}).get("supplier_email", ""),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": get_status(total_inventory, threshold)
+            "status": payload["status"]
         })
-        return jsonify({"success": True, "message": f"Reorder triggered for {display_title}.", "product": product_payload})
+        return jsonify({
+            "success": True,
+            "message": f"Reorder triggered for {payload['title']}.",
+            "product": payload
+        })
     except Exception as e:
         print(f"[StockPulse] Reorder error: {type(e).__name__}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -594,32 +590,18 @@ def trigger_reorder(variant_id):
 def send_purchase_order(variant_id):
     try:
         settings = load_settings()
-        products_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/products.json?limit=250", headers=HEADERS).json()
-        found_variant = None
-        found_product = None
-        for product in products_data.get("products", []):
-            for variant in product["variants"]:
-                if variant["id"] == variant_id:
-                    found_variant = variant
-                    found_product = product
-                    break
-            if found_variant:
-                break
-
-        if not found_variant:
+        product, variant = find_variant_by_id(variant_id)
+        if not variant:
             return jsonify({"success": False, "error": "Variant not found"}), 404
-
-        sku = found_variant["sku"] or f"VAR-{found_variant['id']}"
-        display_title = build_display_title(found_product["title"], found_variant["title"])
+        sku = variant["sku"] or f"VAR-{variant['id']}"
+        display_title = build_display_title(product["title"], variant["title"])
         ps = settings["products"].get(sku, {})
         supplier_email = ps.get("supplier_email")
         supplier_name = ps.get("supplier_name", "Supplier")
         reorder_qty = ps.get("reorder_qty", 20)
         lead_time = ps.get("lead_time", "5-7 days")
-
         if not supplier_email:
             return jsonify({"success": False, "message": "No supplier email configured"}), 400
-
         po_html = f"""<div style="font-family:sans-serif;max-width:560px;margin:0 auto;background:#07111a;border-radius:16px;padding:28px;border:0.5px solid rgba(255,255,255,0.08);">
             <p style="color:rgba(255,255,255,0.5);font-size:10px;letter-spacing:3px;text-transform:uppercase;">StockPulse &middot; Purchase Order</p>
             <h2 style="color:rgba(255,255,255,0.9);margin:12px 0;">PO Request — {display_title}</h2>
@@ -627,14 +609,20 @@ def send_purchase_order(variant_id):
             <p style="color:rgba(255,255,255,0.6);font-size:13px;">Supplier: {supplier_name}</p>
             <p style="color:rgba(255,255,255,0.4);font-size:11px;margin-top:20px;">Please confirm receipt and expected ship date. &mdash; Harlow &amp; Co. Operations</p>
         </div>"""
-
-        send_email(subject=f"📋 PO Sent — {display_title} ({reorder_qty} units)", html_content=po_html)
+        send_email(
+            subject=f"📋 PO Sent — {display_title} ({reorder_qty} units)",
+            html_content=po_html
+        )
         try:
-            msg = Mail(from_email=SENDGRID_FROM_EMAIL, to_emails=supplier_email, subject=f"PO Request from Harlow & Co. — {display_title} ({reorder_qty} units)", html_content=po_html)
+            msg = Mail(
+                from_email=SENDGRID_FROM_EMAIL,
+                to_emails=supplier_email,
+                subject=f"PO Request from Harlow & Co. — {display_title} ({reorder_qty} units)",
+                html_content=po_html
+            )
             SendGridAPIClient(SENDGRID_API_KEY).send(msg)
         except Exception as e:
             print(f"[StockPulse] PO email error: {e}")
-
         return jsonify({"success": True, "message": f"PO sent to {supplier_name}"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

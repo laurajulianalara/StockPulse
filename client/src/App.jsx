@@ -82,8 +82,6 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
-
-        {/* Modal header */}
         <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
@@ -91,10 +89,7 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
           </div>
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 32, height: 32, color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
-
         <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-
-          {/* Product info */}
           <div style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${color}30`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
               <div>
@@ -110,7 +105,6 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             </div>
           </div>
 
-          {/* AI Qty Toggle */}
           <div style={{ background: "rgba(100,200,220,0.06)", border: `0.5px solid ${useAiQty ? "rgba(100,200,220,0.35)" : "rgba(100,200,220,0.15)"}`, borderRadius: 10, padding: "12px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -141,7 +135,6 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             )}
           </div>
 
-          {/* Qty per warehouse */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
               Quantity to Order Per Warehouse
@@ -156,23 +149,13 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Order qty:</div>
-                    <input
-                      type="number"
-                      min="0"
-                      value={qtyPerWarehouse[loc.location] || ""}
-                      onChange={e => {
-                        setUseAiQty(false)
-                        setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 }))
-                      }}
-                      style={{ width: 64, background: useAiQty && aiQtyData ? "rgba(100,200,220,0.08)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${useAiQty && aiQtyData ? "rgba(100,200,220,0.3)" : "rgba(255,255,255,0.15)"}`, borderRadius: 7, padding: "6px 10px", color: useAiQty && aiQtyData ? "rgba(100,200,220,0.9)" : "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }}
-                    />
+                    <input type="number" min="0" value={qtyPerWarehouse[loc.location] || ""} onChange={e => { setUseAiQty(false); setQtyPerWarehouse(prev => ({ ...prev, [loc.location]: parseInt(e.target.value) || 0 })) }} style={{ width: 64, background: useAiQty && aiQtyData ? "rgba(100,200,220,0.08)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${useAiQty && aiQtyData ? "rgba(100,200,220,0.3)" : "rgba(255,255,255,0.15)"}`, borderRadius: 7, padding: "6px 10px", color: useAiQty && aiQtyData ? "rgba(100,200,220,0.9)" : "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 500, outline: "none", textAlign: "center" }} />
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Supplier info */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Supplier Information</div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
@@ -197,13 +180,11 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             </div>
           </div>
 
-          {/* PO message */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Message to Include in PO</div>
             <textarea value={poMessage} onChange={e => setPoMessage(e.target.value)} rows={5} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }} />
           </div>
 
-          {/* Buttons */}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
             <button onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)} disabled={sending || aiQtyLoading} style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: (sending || aiQtyLoading) ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
@@ -235,6 +216,12 @@ function App() {
   const [forecasts, setForecasts] = useState({})
   const [loadingForecast, setLoadingForecast] = useState({})
   const [history, setHistory] = useState([])
+
+  // History filters
+  const [historySearch, setHistorySearch] = useState("")
+  const [historyStatus, setHistoryStatus] = useState("all")
+  const [historyMonth, setHistoryMonth] = useState("all")
+  const [historySort, setHistorySort] = useState("newest")
 
   useEffect(() => {
     fetch(`${API_BASE}/api/inventory`)
@@ -279,9 +266,7 @@ function App() {
 
   useEffect(() => {
     if (inventory.length > 0) {
-      inventory.filter(p => p.status !== "ok").forEach(product => {
-        fetchForecast(product)
-      })
+      inventory.filter(p => p.status !== "ok").forEach(product => fetchForecast(product))
     }
   }, [inventory])
 
@@ -362,6 +347,30 @@ function App() {
       products: { ...prev.products, [sku]: { ...prev.products[sku], [field]: value } }
     }))
   }
+
+  // History filtering
+  const availableMonths = [...new Set(history.map(e => {
+    const d = new Date(e.timestamp)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  }))].sort().reverse()
+
+  const filteredHistory = history
+    .filter(e => {
+      const matchSearch = !historySearch || e.title.toLowerCase().includes(historySearch.toLowerCase()) || e.sku.toLowerCase().includes(historySearch.toLowerCase()) || (e.supplier_name && e.supplier_name.toLowerCase().includes(historySearch.toLowerCase()))
+      const matchStatus = historyStatus === "all" || e.status === historyStatus
+      const matchMonth = historyMonth === "all" || e.timestamp.startsWith(historyMonth)
+      return matchSearch && matchStatus && matchMonth
+    })
+    .sort((a, b) => historySort === "newest"
+      ? new Date(b.timestamp) - new Date(a.timestamp)
+      : historySort === "oldest"
+      ? new Date(a.timestamp) - new Date(b.timestamp)
+      : historySort === "qty_high"
+      ? b.total_qty_ordered - a.total_qty_ordered
+      : a.total_qty_ordered - b.total_qty_ordered
+    )
+
+  const totalQtyOrdered = filteredHistory.reduce((sum, e) => sum + (e.total_qty_ordered || 0), 0)
 
   const filtered = filter === "all" ? inventory : inventory.filter(p => p.status === filter)
   const adminFiltered = adminFilter === "all" ? inventory : inventory.filter(p => p.status === adminFilter)
@@ -468,9 +477,7 @@ function App() {
                       <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{product.title}</div>
                       <div style={{ color: "rgba(255,255,255,0.28)", fontSize: 10, letterSpacing: 2 }}>{product.sku}</div>
                     </div>
-                    <span style={{ background: statusColor(product.status) + "18", color: statusColor(product.status), border: `0.5px solid ${statusColor(product.status)}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                      {product.status}
-                    </span>
+                    <span style={{ background: statusColor(product.status) + "18", color: statusColor(product.status), border: `0.5px solid ${statusColor(product.status)}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>{product.status}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", marginBottom: 18 }}>
                     <div>
@@ -498,8 +505,6 @@ function App() {
                       ))}
                     </div>
                   </div>
-
-                  {/* AI Forecast Panel */}
                   {product.status !== "ok" && (
                     <div style={{ marginTop: 14, background: "rgba(100,200,220,0.06)", border: "0.5px solid rgba(100,200,220,0.18)", borderRadius: 10, padding: "10px 14px" }}>
                       <div style={{ fontSize: 8, color: "rgba(100,200,220,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>⚡ AI Forecast</div>
@@ -640,8 +645,7 @@ function App() {
                                 </td>
                                 <td style={{ padding: "12px" }}>
                                   {isActionable ? (
-                                    <div onClick={() => updateProductSetting(product.sku, "auto_send", !ps.auto_send)}
-                                      style={{ width: 36, height: 20, borderRadius: 100, background: ps.auto_send ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${ps.auto_send ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
+                                    <div onClick={() => updateProductSetting(product.sku, "auto_send", !ps.auto_send)} style={{ width: 36, height: 20, borderRadius: 100, background: ps.auto_send ? "rgba(249,115,22,0.25)" : "rgba(255,255,255,0.07)", border: `0.5px solid ${ps.auto_send ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.1)"}`, cursor: "pointer", position: "relative", transition: "all 0.3s" }}>
                                       <div style={{ position: "absolute", width: 14, height: 14, borderRadius: "50%", background: ps.auto_send ? "#f97316" : "rgba(255,255,255,0.35)", top: 2.5, left: ps.auto_send ? 18 : 3, transition: "all 0.3s" }}></div>
                                     </div>
                                   ) : (
@@ -684,35 +688,102 @@ function App() {
                 <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 18, fontWeight: 500, marginBottom: 4 }}>Reorder History</div>
                 <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>All reorders triggered with timestamps and details</div>
               </div>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", letterSpacing: 1, textTransform: "uppercase" }}>{history.length} total reorders</div>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Total Units Ordered</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: "rgba(100,200,220,0.9)" }}>{totalQtyOrdered}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Showing</div>
+                  <div style={{ fontSize: 18, fontWeight: 500, color: "rgba(255,255,255,0.6)" }}>{filteredHistory.length} / {history.length}</div>
+                </div>
+              </div>
             </div>
 
-            {history.length === 0 ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+            {/* Filters */}
+            <div style={{ background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "16px 20px", marginBottom: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+
+              {/* Search */}
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Search Product or SKU</div>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={historySearch}
+                  onChange={e => setHistorySearch(e.target.value)}
+                  style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none" }}
+                />
+              </div>
+
+              {/* Month */}
+              <div style={{ minWidth: 140 }}>
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Month</div>
+                <select value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Months</option>
+                  {availableMonths.map(m => {
+                    const [year, month] = m.split("-")
+                    const label = new Date(parseInt(year), parseInt(month) - 1).toLocaleString("default", { month: "long", year: "numeric" })
+                    return <option key={m} value={m}>{label}</option>
+                  })}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div style={{ minWidth: 130 }}>
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Status at Reorder</div>
+                <select value={historyStatus} onChange={e => setHistoryStatus(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="all">All Statuses</option>
+                  <option value="critical">Critical</option>
+                  <option value="low">Low</option>
+                  <option value="ok">OK</option>
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div style={{ minWidth: 150 }}>
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Sort By</div>
+                <select value={historySort} onChange={e => setHistorySort(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="qty_high">Qty — High to Low</option>
+                  <option value="qty_low">Qty — Low to High</option>
+                </select>
+              </div>
+
+              {/* Clear */}
+              {(historySearch || historyStatus !== "all" || historyMonth !== "all" || historySort !== "newest") && (
+                <button onClick={() => { setHistorySearch(""); setHistoryStatus("all"); setHistoryMonth("all"); setHistorySort("newest") }} style={{ background: "rgba(239,68,68,0.1)", border: "0.5px solid rgba(239,68,68,0.25)", borderRadius: 7, padding: "7px 14px", color: "#ef4444", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", alignSelf: "end" }}>
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {filteredHistory.length === 0 ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 200 }}>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
-                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 4 }}>No reorders yet</div>
-                  <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>Reorders triggered from the Reorder Rules tab will appear here</div>
+                  <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 4 }}>{history.length === 0 ? "No reorders yet" : "No results match your filters"}</div>
+                  <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>{history.length === 0 ? "Reorders triggered from the Reorder Rules tab will appear here" : "Try adjusting your search or filters"}</div>
                 </div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {history.map((entry, i) => (
-                  <div key={i} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                {filteredHistory.map((entry, i) => (
+                  <div key={i} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, flex: 1, minWidth: 0 }}>
                       <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(99,102,241,0.12)", border: "0.5px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                         <span style={{ fontSize: 16 }}>📦</span>
                       </div>
-                      <div>
-                        <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{entry.title}</div>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.title}</div>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                           <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1.5 }}>{entry.sku}</span>
                           <span style={{ background: statusColor(entry.status) + "18", color: statusColor(entry.status), border: `0.5px solid ${statusColor(entry.status)}40`, borderRadius: 100, padding: "1px 7px", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>{entry.status}</span>
                           {entry.supplier_name && <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>→ {entry.supplier_name}</span>}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 20, alignItems: "center", flexShrink: 0 }}>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Qty Ordered</div>
                         <div style={{ color: "rgba(100,200,220,0.9)", fontSize: 18, fontWeight: 500 }}>{entry.total_qty_ordered}</div>
@@ -722,7 +793,7 @@ function App() {
                         <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>{entry.inventory_at_reorder} units</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Timestamp</div>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 2 }}>Date & Time</div>
                         <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11 }}>{entry.timestamp}</div>
                       </div>
                     </div>
