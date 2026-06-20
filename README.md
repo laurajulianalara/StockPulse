@@ -189,7 +189,7 @@ A real-time health gauge in the dashboard header shows the percentage of product
 
 Built by **Laura Juliana Lara**, a Solutions Engineer with 8 years of technical pre-sales experience spanning SaaS, AI-native platforms, and enterprise e-commerce. StockPulse was designed to demonstrate the full range of SE skills in a single POC: technical implementation, product thinking, business storytelling, and AI integration.
 
-- **LinkedIn:** [linkedin.com/in/laurajulianalara](https://linkedin.com/in/laurajulianalara)
+- **LinkedIn:** [linkedin.com/in/laurajulianalara](https://www.linkedin.com/in/laura-juliana-lara-60001336b/)
 - **Target roles:** Senior Solutions Engineer, Pre-Sales Engineer, Sales Engineer
 - **Specialties:** API integrations, POC development, enterprise automation, AI-powered workflows
 
