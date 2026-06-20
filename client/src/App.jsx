@@ -22,6 +22,15 @@ const grainStyle2 = {
   backgroundSize: "120px", opacity: 0.55, mixBlendMode: "soft-light", pointerEvents: "none", zIndex: 0
 }
 
+function getSimulatedDailySales(sku) {
+  let hash = 0
+  for (let i = 0; i < sku.length; i++) hash = ((hash << 5) - hash) + sku.charCodeAt(i)
+  const seed = Math.abs(hash) % 1000
+  const x = Math.sin(seed) * 10000
+  const rand = x - Math.floor(x)
+  return Math.round((1.5 + rand * 3.0) * 10) / 10
+}
+
 function ReorderModal({ product, settings, onClose, onConfirm, sending, success }) {
   const ps = settings?.products?.[product.sku] || {}
   const [qtyPerWarehouse, setQtyPerWarehouse] = useState(
@@ -37,6 +46,9 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
   const [aiQtyLoading, setAiQtyLoading] = useState(false)
   const [aiQtyData, setAiQtyData] = useState(null)
   const [aiQtyError, setAiQtyError] = useState(false)
+  const [actions, setActions] = useState(null)
+  const [actionsLoading, setActionsLoading] = useState(false)
+  const [showActions, setShowActions] = useState(false)
 
   const totalQty = Object.values(qtyPerWarehouse).reduce((a, b) => a + (parseInt(b) || 0), 0)
   const color = product.status === "critical" ? "#ef4444" : "#f97316"
@@ -60,15 +72,26 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
     setAiQtyLoading(false)
   }
 
+  const fetchActions = async () => {
+    if (actions) { setShowActions(true); return }
+    setActionsLoading(true)
+    setShowActions(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/actions/${product.id}`)
+      const data = await res.json()
+      if (data.success) setActions(data.actions)
+    } catch (err) {
+      console.error("Actions failed", err)
+    }
+    setActionsLoading(false)
+  }
+
   const handleAiToggle = () => {
     const newVal = !useAiQty
     setUseAiQty(newVal)
     if (newVal) {
-      if (aiQtyData) {
-        setQtyPerWarehouse(aiQtyData.per_warehouse)
-      } else {
-        fetchAiQty()
-      }
+      if (aiQtyData) setQtyPerWarehouse(aiQtyData.per_warehouse)
+      else fetchAiQty()
     } else {
       setQtyPerWarehouse(
         product.locations.reduce((acc, loc) => {
@@ -79,9 +102,11 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
     }
   }
 
+  const urgencyColor = (u) => u === "high" ? "#ef4444" : u === "medium" ? "#f97316" : "#22c55e"
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 580, maxHeight: "90vh", overflowY: "auto" }}>
+      <div style={{ background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 18, width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto" }}>
         <div style={{ padding: "22px 28px", borderBottom: "0.5px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 16, fontWeight: 500 }}>Trigger Reorder</div>
@@ -90,6 +115,8 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
           <button onClick={onClose} style={{ background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 8, width: 32, height: 32, color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 16 }}>✕</button>
         </div>
         <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+
+          {/* Product info */}
           <div style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${color}30`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
               <div>
@@ -105,6 +132,44 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             </div>
           </div>
 
+          {/* AI Alternative Actions */}
+          <div style={{ background: "rgba(139,92,246,0.06)", border: `0.5px solid ${showActions ? "rgba(139,92,246,0.3)" : "rgba(139,92,246,0.15)"}`, borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", cursor: "pointer" }} onClick={() => showActions ? setShowActions(false) : fetchActions()}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(139,92,246,0.12)", border: "0.5px solid rgba(139,92,246,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ fontSize: 13 }}>🧠</span>
+                </div>
+                <div>
+                  <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 1 }}>AI Alternative Actions</div>
+                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>Smart merchant actions beyond reordering — ranked by urgency</div>
+                </div>
+              </div>
+              <div style={{ color: "rgba(139,92,246,0.7)", fontSize: 10, letterSpacing: 1, textTransform: "uppercase" }}>
+                {showActions ? "▲ Hide" : "▼ Show"}
+              </div>
+            </div>
+            {showActions && (
+              <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                {actionsLoading ? (
+                  <div style={{ color: "rgba(139,92,246,0.6)", fontSize: 11, fontStyle: "italic", textAlign: "center", padding: "12px 0" }}>🧠 Analyzing merchant options...</div>
+                ) : actions ? (
+                  actions.map((a, i) => (
+                    <div key={i} style={{ background: "rgba(255,255,255,0.04)", borderLeft: `2px solid ${urgencyColor(a.urgency)}`, borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "start", gap: 10 }}>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500, marginBottom: 3 }}>{a.action}</div>
+                        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11, lineHeight: 1.5 }}>{a.reason}</div>
+                      </div>
+                      <span style={{ background: urgencyColor(a.urgency) + "15", color: urgencyColor(a.urgency), border: `0.5px solid ${urgencyColor(a.urgency)}30`, borderRadius: 100, padding: "2px 8px", fontSize: 8, letterSpacing: 1, textTransform: "uppercase", whiteSpace: "nowrap", flexShrink: 0 }}>{a.urgency}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, textAlign: "center", padding: "8px 0" }}>Could not load suggestions</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* AI Qty Toggle */}
           <div style={{ background: "rgba(100,200,220,0.06)", border: `0.5px solid ${useAiQty ? "rgba(100,200,220,0.35)" : "rgba(100,200,220,0.15)"}`, borderRadius: 10, padding: "12px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -123,7 +188,7 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             {useAiQty && (
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: "0.5px solid rgba(100,200,220,0.1)" }}>
                 {aiQtyLoading ? (
-                  <div style={{ color: "rgba(100,200,220,0.6)", fontSize: 11, fontStyle: "italic" }}>⚡ AI is calculating optimal quantities...</div>
+                  <div style={{ color: "rgba(100,200,220,0.6)", fontSize: 11, fontStyle: "italic" }}>⚡ Calculating optimal quantities...</div>
                 ) : aiQtyError ? (
                   <div style={{ color: "#ef4444", fontSize: 11 }}>AI recommendation unavailable — using default quantities</div>
                 ) : aiQtyData ? (
@@ -135,6 +200,7 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             )}
           </div>
 
+          {/* Qty per warehouse */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>
               Quantity to Order Per Warehouse
@@ -156,6 +222,7 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             </div>
           </div>
 
+          {/* Supplier info */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Supplier Information</div>
             <div style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, overflow: "hidden" }}>
@@ -180,11 +247,13 @@ function ReorderModal({ product, settings, onClose, onConfirm, sending, success 
             </div>
           </div>
 
+          {/* PO message */}
           <div>
             <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>Message to Include in PO</div>
             <textarea value={poMessage} onChange={e => setPoMessage(e.target.value)} rows={5} style={{ width: "100%", background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px 14px", color: "rgba(255,255,255,0.7)", fontSize: 12, outline: "none", resize: "vertical", lineHeight: 1.6, fontFamily: "sans-serif" }} />
           </div>
 
+          {/* Buttons */}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={onClose} style={{ flex: 1, background: "transparent", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "12px", color: "rgba(255,255,255,0.4)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>Cancel</button>
             <button onClick={() => onConfirm(product, qtyPerWarehouse, poMessage, totalQty)} disabled={sending || aiQtyLoading} style={{ flex: 2, background: success ? "rgba(34,197,94,0.2)" : color + "20", border: `1px solid ${success ? "rgba(34,197,94,0.5)" : color + "50"}`, borderRadius: 10, padding: "12px", color: success ? "#22c55e" : color, fontSize: 11, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", cursor: (sending || aiQtyLoading) ? "not-allowed" : "pointer", transition: "all 0.3s" }}>
@@ -216,8 +285,6 @@ function App() {
   const [forecasts, setForecasts] = useState({})
   const [loadingForecast, setLoadingForecast] = useState({})
   const [history, setHistory] = useState([])
-
-  // History filters
   const [historySearch, setHistorySearch] = useState("")
   const [historyStatus, setHistoryStatus] = useState("all")
   const [historyMonth, setHistoryMonth] = useState("all")
@@ -271,12 +338,8 @@ function App() {
   }, [inventory])
 
   const handlePassword = () => {
-    if (passwordInput === ADMIN_PASSWORD) {
-      setAuthenticated(true)
-      setPasswordError(false)
-    } else {
-      setPasswordError(true)
-    }
+    if (passwordInput === ADMIN_PASSWORD) { setAuthenticated(true); setPasswordError(false) }
+    else setPasswordError(true)
   }
 
   const handleGlobalToggle = () => {
@@ -306,11 +369,7 @@ function App() {
 
   const handleSaveSettings = async () => {
     setSavingSettings(true)
-    await fetch(`${API_BASE}/api/settings`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings)
-    })
+    await fetch(`${API_BASE}/api/settings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) })
     setSavingSettings(false)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 3000)
@@ -342,13 +401,28 @@ function App() {
   }
 
   const updateProductSetting = (sku, field, value) => {
-    setSettings(prev => ({
-      ...prev,
-      products: { ...prev.products, [sku]: { ...prev.products[sku], [field]: value } }
-    }))
+    setSettings(prev => ({ ...prev, products: { ...prev.products, [sku]: { ...prev.products[sku], [field]: value } } }))
   }
 
-  // History filtering
+  const atRiskProducts = inventory.filter(p => {
+    if (p.status !== "ok") return false
+    const dailySales = getSimulatedDailySales(p.sku)
+    const daysLeft = dailySales > 0 ? p.inventory / dailySales : 999
+    return daysLeft <= 7
+  }).map(p => {
+    const dailySales = getSimulatedDailySales(p.sku)
+    const daysLeft = Math.round(p.inventory / dailySales * 10) / 10
+    return { ...p, daysLeft, dailySales }
+  })
+
+  const filtered = filter === "all" ? inventory : inventory.filter(p => p.status === filter)
+  const adminFiltered = adminFilter === "all" ? inventory : inventory.filter(p => p.status === adminFilter)
+  const critical = inventory.filter(p => p.status === "critical").length
+  const low = inventory.filter(p => p.status === "low").length
+  const ok = inventory.filter(p => p.status === "ok").length
+  const healthScore = inventory.length > 0 ? Math.round((ok / inventory.length) * 100) : 0
+  const healthColor = healthScore >= 70 ? "#22c55e" : healthScore >= 40 ? "#f97316" : "#ef4444"
+
   const availableMonths = [...new Set(history.map(e => {
     const d = new Date(e.timestamp)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
@@ -361,24 +435,9 @@ function App() {
       const matchMonth = historyMonth === "all" || e.timestamp.startsWith(historyMonth)
       return matchSearch && matchStatus && matchMonth
     })
-    .sort((a, b) => historySort === "newest"
-      ? new Date(b.timestamp) - new Date(a.timestamp)
-      : historySort === "oldest"
-      ? new Date(a.timestamp) - new Date(b.timestamp)
-      : historySort === "qty_high"
-      ? b.total_qty_ordered - a.total_qty_ordered
-      : a.total_qty_ordered - b.total_qty_ordered
-    )
+    .sort((a, b) => historySort === "newest" ? new Date(b.timestamp) - new Date(a.timestamp) : historySort === "oldest" ? new Date(a.timestamp) - new Date(b.timestamp) : historySort === "qty_high" ? b.total_qty_ordered - a.total_qty_ordered : a.total_qty_ordered - b.total_qty_ordered)
 
   const totalQtyOrdered = filteredHistory.reduce((sum, e) => sum + (e.total_qty_ordered || 0), 0)
-
-  const filtered = filter === "all" ? inventory : inventory.filter(p => p.status === filter)
-  const adminFiltered = adminFilter === "all" ? inventory : inventory.filter(p => p.status === adminFilter)
-  const critical = inventory.filter(p => p.status === "critical").length
-  const low = inventory.filter(p => p.status === "low").length
-  const ok = inventory.filter(p => p.status === "ok").length
-  const healthScore = inventory.length > 0 ? Math.round((ok / inventory.length) * 100) : 0
-  const healthColor = healthScore >= 70 ? "#22c55e" : healthScore >= 40 ? "#f97316" : "#ef4444"
 
   if (loading) return (
     <div style={{ minHeight: "100vh", background: gradientBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -461,6 +520,46 @@ function App() {
               ))}
             </div>
 
+            {/* At Risk Banner */}
+            {atRiskProducts.length > 0 && (
+              <div style={{ background: "rgba(234,179,8,0.06)", border: "0.5px solid rgba(234,179,8,0.25)", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 14 }}>⚠️</span>
+                  <div>
+                    <span style={{ color: "rgba(234,179,8,0.9)", fontSize: 12, fontWeight: 600 }}>
+                      {atRiskProducts.length} product{atRiskProducts.length > 1 ? "s" : ""} trending toward stockout
+                    </span>
+                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginLeft: 8 }}>Currently OK but projected to hit threshold within 7 days</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {atRiskProducts.map(p => (
+                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(234,179,8,0.15)", borderRadius: 8, padding: "10px 14px" }}>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.82)", fontSize: 12, fontWeight: 500 }}>{p.title}</div>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1.5, marginTop: 1 }}>{p.sku}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 1 }}>Current Stock</div>
+                          <div style={{ color: "#22c55e", fontSize: 14, fontWeight: 500 }}>{p.inventory} units</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 1 }}>Daily Velocity</div>
+                          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>{p.dailySales}/day</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 8, letterSpacing: 2, textTransform: "uppercase", marginBottom: 1 }}>Est. Days Left</div>
+                          <div style={{ color: "rgba(234,179,8,0.9)", fontSize: 14, fontWeight: 600 }}>{p.daysLeft} days</div>
+                        </div>
+                        <span style={{ background: "rgba(234,179,8,0.12)", color: "rgba(234,179,8,0.85)", border: "0.5px solid rgba(234,179,8,0.3)", borderRadius: 100, padding: "2px 10px", fontSize: 8, letterSpacing: 1.5, textTransform: "uppercase" }}>At Risk</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
               {["all", "critical", "low", "ok"].map(f => (
                 <button key={f} onClick={() => setFilter(f)} style={{ background: filter === f ? "rgba(255,255,255,0.1)" : "transparent", border: `0.5px solid ${filter === f ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.08)"}`, borderRadius: 100, padding: "6px 16px", color: filter === f ? "rgba(255,255,255,0.88)" : "rgba(255,255,255,0.35)", fontSize: 11, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer" }}>
@@ -470,55 +569,61 @@ function App() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
-              {filtered.map(product => (
-                <div key={product.id} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${product.status === "ok" ? "rgba(255,255,255,0.1)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22, minHeight: 320 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
-                    <div>
-                      <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{product.title}</div>
-                      <div style={{ color: "rgba(255,255,255,0.28)", fontSize: 10, letterSpacing: 2 }}>{product.sku}</div>
+              {filtered.map(product => {
+                const isAtRisk = atRiskProducts.find(p => p.id === product.id)
+                return (
+                  <div key={product.id} style={{ background: "rgba(255,255,255,0.07)", backdropFilter: "blur(10px)", border: `0.5px solid ${isAtRisk ? "rgba(234,179,8,0.3)" : product.status === "ok" ? "rgba(255,255,255,0.1)" : statusColor(product.status) + "30"}`, borderRadius: 14, padding: 22, minHeight: 320 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.88)", fontWeight: 500, fontSize: 14, marginBottom: 4 }}>{product.title}</div>
+                        <div style={{ color: "rgba(255,255,255,0.28)", fontSize: 10, letterSpacing: 2 }}>{product.sku}</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "end", gap: 4 }}>
+                        <span style={{ background: statusColor(product.status) + "18", color: statusColor(product.status), border: `0.5px solid ${statusColor(product.status)}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>{product.status}</span>
+                        {isAtRisk && <span style={{ background: "rgba(234,179,8,0.12)", color: "rgba(234,179,8,0.85)", border: "0.5px solid rgba(234,179,8,0.3)", borderRadius: 100, padding: "2px 8px", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>⚠ {isAtRisk.daysLeft}d left</span>}
+                      </div>
                     </div>
-                    <span style={{ background: statusColor(product.status) + "18", color: statusColor(product.status), border: `0.5px solid ${statusColor(product.status)}40`, borderRadius: 100, padding: "3px 10px", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", whiteSpace: "nowrap" }}>{product.status}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", marginBottom: 18 }}>
-                    <div>
-                      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Stock</div>
-                      <div style={{ color: statusColor(product.status), fontSize: 32, fontWeight: 500, lineHeight: 1 }}>{product.inventory}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", marginBottom: 18 }}>
+                      <div>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Total Stock</div>
+                        <div style={{ color: isAtRisk ? "rgba(234,179,8,0.9)" : statusColor(product.status), fontSize: 32, fontWeight: 500, lineHeight: 1 }}>{product.inventory}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Threshold</div>
+                        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 20 }}>{product.threshold}</div>
+                      </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Threshold</div>
-                      <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 20 }}>{product.threshold}</div>
-                    </div>
-                  </div>
-                  <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
-                    <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>By Location</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                      {product.locations.map((loc, i) => (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11 }}>{loc.location}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ width: 60, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-                              <div style={{ width: `${Math.min((loc.quantity / product.threshold) * 100, 100)}%`, height: "100%", background: statusColor(product.status), borderRadius: 2 }}></div>
+                    <div style={{ borderTop: "0.5px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
+                      <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 }}>By Location</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                        {product.locations.map((loc, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 11 }}>{loc.location}</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ width: 60, height: 3, borderRadius: 2, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                                <div style={{ width: `${Math.min((loc.quantity / product.threshold) * 100, 100)}%`, height: "100%", background: isAtRisk ? "rgba(234,179,8,0.7)" : statusColor(product.status), borderRadius: 2 }}></div>
+                              </div>
+                              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 500, minWidth: 16, textAlign: "right" }}>{loc.quantity}</div>
                             </div>
-                            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 500, minWidth: 16, textAlign: "right" }}>{loc.quantity}</div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
+                    {product.status !== "ok" && (
+                      <div style={{ marginTop: 14, background: "rgba(100,200,220,0.06)", border: "0.5px solid rgba(100,200,220,0.18)", borderRadius: 10, padding: "10px 14px" }}>
+                        <div style={{ fontSize: 8, color: "rgba(100,200,220,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>⚡ AI Forecast</div>
+                        {loadingForecast[product.id] ? (
+                          <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Analyzing inventory trends...</div>
+                        ) : forecasts[product.id] ? (
+                          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, lineHeight: 1.6 }}>{forecasts[product.id]}</div>
+                        ) : (
+                          <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Forecast unavailable</div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {product.status !== "ok" && (
-                    <div style={{ marginTop: 14, background: "rgba(100,200,220,0.06)", border: "0.5px solid rgba(100,200,220,0.18)", borderRadius: 10, padding: "10px 14px" }}>
-                      <div style={{ fontSize: 8, color: "rgba(100,200,220,0.6)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>⚡ AI Forecast</div>
-                      {loadingForecast[product.id] ? (
-                        <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Analyzing inventory trends...</div>
-                      ) : forecasts[product.id] ? (
-                        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11, lineHeight: 1.6 }}>{forecasts[product.id]}</div>
-                      ) : (
-                        <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 11, fontStyle: "italic" }}>Forecast unavailable</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </>
         )}
@@ -700,22 +805,11 @@ function App() {
               </div>
             </div>
 
-            {/* Filters */}
             <div style={{ background: "rgba(255,255,255,0.05)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "16px 20px", marginBottom: 20, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
-
-              {/* Search */}
               <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Search Product or SKU</div>
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                  style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none" }}
-                />
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Search</div>
+                <input type="text" placeholder="Product, SKU, or supplier..." value={historySearch} onChange={e => setHistorySearch(e.target.value)} style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none" }} />
               </div>
-
-              {/* Month */}
               <div style={{ minWidth: 140 }}>
                 <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Month</div>
                 <select value={historyMonth} onChange={e => setHistoryMonth(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
@@ -727,10 +821,8 @@ function App() {
                   })}
                 </select>
               </div>
-
-              {/* Status */}
               <div style={{ minWidth: 130 }}>
-                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Status at Reorder</div>
+                <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Status</div>
                 <select value={historyStatus} onChange={e => setHistoryStatus(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Statuses</option>
                   <option value="critical">Critical</option>
@@ -738,8 +830,6 @@ function App() {
                   <option value="ok">OK</option>
                 </select>
               </div>
-
-              {/* Sort */}
               <div style={{ minWidth: 150 }}>
                 <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Sort By</div>
                 <select value={historySort} onChange={e => setHistorySort(e.target.value)} style={{ width: "100%", background: "#0d1e2a", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 7, padding: "7px 12px", color: "rgba(255,255,255,0.8)", fontSize: 12, outline: "none", cursor: "pointer" }}>
@@ -749,11 +839,9 @@ function App() {
                   <option value="qty_low">Qty — Low to High</option>
                 </select>
               </div>
-
-              {/* Clear */}
               {(historySearch || historyStatus !== "all" || historyMonth !== "all" || historySort !== "newest") && (
                 <button onClick={() => { setHistorySearch(""); setHistoryStatus("all"); setHistoryMonth("all"); setHistorySort("newest") }} style={{ background: "rgba(239,68,68,0.1)", border: "0.5px solid rgba(239,68,68,0.25)", borderRadius: 7, padding: "7px 14px", color: "#ef4444", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", cursor: "pointer", alignSelf: "end" }}>
-                  Clear Filters
+                  Clear
                 </button>
               )}
             </div>
@@ -763,7 +851,7 @@ function App() {
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
                   <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 4 }}>{history.length === 0 ? "No reorders yet" : "No results match your filters"}</div>
-                  <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>{history.length === 0 ? "Reorders triggered from the Reorder Rules tab will appear here" : "Try adjusting your search or filters"}</div>
+                  <div style={{ color: "rgba(255,255,255,0.2)", fontSize: 11 }}>{history.length === 0 ? "Trigger a reorder from the Reorder Rules tab" : "Try adjusting your search or filters"}</div>
                 </div>
               </div>
             ) : (
@@ -775,7 +863,7 @@ function App() {
                         <span style={{ fontSize: 16 }}>📦</span>
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entry.title}</div>
+                        <div style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{entry.title}</div>
                         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                           <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, letterSpacing: 1.5 }}>{entry.sku}</span>
                           <span style={{ background: statusColor(entry.status) + "18", color: statusColor(entry.status), border: `0.5px solid ${statusColor(entry.status)}40`, borderRadius: 100, padding: "1px 7px", fontSize: 8, letterSpacing: 1, textTransform: "uppercase" }}>{entry.status}</span>

@@ -1,0 +1,110 @@
+{
+  "auto_reorder_enabled": true,
+  "global_reorder_qty": 0,
+  "products": {
+    "LTP-001": {
+      "threshold": 10,
+      "reorder_qty": 50,
+      "supplier_name": "Casa Linen Co.",
+      "supplier_email": "orders@casalinen.com",
+      "lead_time": "5 days",
+      "auto_send": true
+    },
+    "CVS-002": {
+      "threshold": 15,
+      "reorder_qty": 30,
+      "supplier_name": "ArtCraft Supply",
+      "supplier_email": "po@artcraftsupply.com",
+      "lead_time": "7 days",
+      "auto_send": false
+    },
+    "BPF-003": {
+      "threshold": 10,
+      "reorder_qty": 40,
+      "supplier_name": "EcoFrame Ltd.",
+      "supplier_email": "sales@ecoframe.com",
+      "lead_time": "4 days",
+      "auto_send": true
+    },
+    "WSB-004": {
+      "threshold": 5,
+      "reorder_qty": 25,
+      "supplier_name": "Weave & Co.",
+      "supplier_email": "orders@weaveandco.com",
+      "lead_time": "6 days",
+      "auto_send": true
+    },
+    "MCS-005": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "Stone & Style",
+      "supplier_email": "po@stoneandstyle.com",
+      "lead_time": "8 days",
+      "auto_send": false
+    },
+    "LTR-006": {
+      "threshold": 8,
+      "reorder_qty": 35,
+      "supplier_name": "Casa Linen Co.",
+      "supplier_email": "orders@casalinen.com",
+      "lead_time": "5 days",
+      "auto_send": true
+    },
+    "RWM-007": {
+      "threshold": 10,
+      "reorder_qty": 15,
+      "supplier_name": "Rattan Works",
+      "supplier_email": "supply@rattanworks.com",
+      "lead_time": "10 days",
+      "auto_send": true
+    },
+    "SCS-008": {
+      "threshold": 8,
+      "reorder_qty": 45,
+      "supplier_name": "Pure Wick Co.",
+      "supplier_email": "orders@purewick.com",
+      "lead_time": "3 days",
+      "auto_send": true
+    },
+    "VAR-53787452309868": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "",
+      "supplier_email": "",
+      "lead_time": "5-7 days",
+      "auto_send": true
+    },
+    "VAR-53787452342636": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "",
+      "supplier_email": "",
+      "lead_time": "5-7 days",
+      "auto_send": true
+    },
+    "VAR-53786947617132": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "",
+      "supplier_email": "",
+      "lead_time": "5-7 days",
+      "auto_send": true
+    },
+    "VAR-53786947846508": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "",
+      "supplier_email": "",
+      "lead_time": "5-7 days",
+      "auto_send": true
+    },
+    "VAR-53786947879276": {
+      "threshold": 10,
+      "reorder_qty": 20,
+      "supplier_name": "",
+      "supplier_email": "",
+      "lead_time": "5-7 days",
+      "auto_send": true
+    }
+  }
+}

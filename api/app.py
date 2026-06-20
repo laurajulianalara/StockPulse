@@ -130,16 +130,19 @@ def get_ai_forecast(product):
         weekly_sales = round(daily_sales * 7, 1)
         monthly_sales = round(daily_sales * 30, 1)
         prompt = f"""You are an inventory analyst for Harlow & Co., a premium home decor retailer with 3 warehouses.
+
 Product: {product['title']} (SKU: {product['sku']})
 Current Total Stock: {inventory} units
 Reorder Threshold: {threshold} units
 Status: {status.upper()}
 Stock by Location: {location_text}
+
 Simulated Sales Data (last 30 days):
 - Average daily sales: {daily_sales} units/day
 - Weekly average: {weekly_sales} units/week
 - Monthly total: {monthly_sales} units/month
 - Estimated days of stock remaining: {days_of_stock} days
+
 Write a concise 2-sentence forecast. Include how many days until stockout and a specific recommended reorder quantity to cover 45 days of demand. Be direct and urgent. Do not use bullet points."""
         message = client.messages.create(
             model="claude-sonnet-4-5",
@@ -164,7 +167,8 @@ def get_ai_qty_recommendation(product, settings):
         random.seed(hash(product["sku"]) % 1000)
         daily_sales = round(random.uniform(1.5, 4.5), 1)
         example_json = json.dumps({k: 15 for k in location_names})
-        prompt = f"""You are an inventory analyst for Harlow & Co.
+        prompt = f"""You are an inventory analyst for Harlow & Co., a premium home decor retailer.
+
 Product: {product['title']} (SKU: {product['sku']})
 Current Total Stock: {product['inventory']} units
 Reorder Threshold: {product['threshold']} units
@@ -172,6 +176,7 @@ Status: {product['status'].upper()}
 Locations: {json.dumps(location_names)}
 Supplier Lead Time: {lead_time}
 Average Daily Sales: {daily_sales} units/day
+
 Recommend a reorder quantity per warehouse to cover 45 days of demand.
 Respond ONLY with valid JSON, no markdown:
 {{"total_qty": 45, "per_warehouse": {example_json}, "reasoning": "One sentence explanation"}}"""
@@ -190,6 +195,50 @@ Respond ONLY with valid JSON, no markdown:
         return data
     except Exception as e:
         print(f"[StockPulse] AI qty error: {type(e).__name__}: {e}")
+        return None
+
+def get_ai_alternative_actions(product, settings):
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        ps = settings.get("products", {}).get(product["sku"], {})
+        lead_time = ps.get("lead_time", "5-7 days")
+        random.seed(hash(product["sku"]) % 1000)
+        daily_sales = round(random.uniform(1.5, 4.5), 1)
+        days_of_stock = round(product["inventory"] / daily_sales, 1) if daily_sales > 0 and product["inventory"] > 0 else 0
+        prompt = f"""You are a senior merchant advisor for Harlow & Co., a premium home decor retailer.
+
+Product: {product['title']} (SKU: {product['sku']})
+Current Stock: {product['inventory']} units
+Status: {product['status'].upper()}
+Daily Sales Velocity: {daily_sales} units/day
+Days Until Stockout: {days_of_stock} days
+Reorder Lead Time: {lead_time}
+
+A merchant does not always immediately reorder when stock is low. Based on the situation above, suggest exactly 3 alternative or complementary actions beyond reordering that a smart merchant might take right now. Each action should be specific, actionable, and reflect real merchant operations thinking such as price adjustments, promotion changes, availability settings, or demand management.
+
+Respond ONLY with a JSON array of exactly 3 objects, no markdown:
+[
+  {{"action": "Short action title", "reason": "One sentence explaining why this makes sense right now", "urgency": "high"}},
+  {{"action": "Short action title", "reason": "One sentence explaining why this makes sense right now", "urgency": "medium"}},
+  {{"action": "Short action title", "reason": "One sentence explaining why this makes sense right now", "urgency": "low"}}
+]"""
+        message = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        raw = message.content[0].text.strip()
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+        actions = json.loads(raw)
+        return actions
+    except Exception as e:
+        print(f"[StockPulse] AI actions error: {type(e).__name__}: {e}")
         return None
 
 def send_email(subject, html_content):
@@ -430,6 +479,24 @@ def get_forecast_qty(variant_id):
         return jsonify({"success": True, "recommendation": recommendation})
     except Exception as e:
         print(f"[StockPulse] Forecast qty error: {type(e).__name__}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/api/actions/<int:variant_id>", methods=["GET"])
+def get_alternative_actions(variant_id):
+    try:
+        settings = load_settings()
+        locations_data = requests.get(f"https://{SHOPIFY_STORE_URL}/admin/api/{API_VERSION}/locations.json", headers=HEADERS).json()
+        locations = {loc["id"]: loc["name"] for loc in locations_data["locations"]}
+        product, variant = find_variant_by_id(variant_id)
+        if not variant:
+            return jsonify({"success": False, "error": "Variant not found"}), 404
+        sku = variant["sku"] or f"VAR-{variant['id']}"
+        settings = ensure_product_in_settings(settings, sku)
+        payload = build_product_payload(product, variant, settings, locations)
+        actions = get_ai_alternative_actions(payload, settings)
+        return jsonify({"success": True, "actions": actions, "product": payload})
+    except Exception as e:
+        print(f"[StockPulse] Actions error: {type(e).__name__}: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/api/history", methods=["GET"])
