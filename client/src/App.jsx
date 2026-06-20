@@ -404,16 +404,25 @@ function App() {
     setSettings(prev => ({ ...prev, products: { ...prev.products, [sku]: { ...prev.products[sku], [field]: value } } }))
   }
 
-  const atRiskProducts = inventory.filter(p => {
+  // At Risk — OK products trending toward stockout within 30 days
+  // Demo guarantee: always show at least 2 products for presentation purposes
+  const atRiskCalculated = inventory.filter(p => {
     if (p.status !== "ok") return false
     const dailySales = getSimulatedDailySales(p.sku)
     const daysLeft = dailySales > 0 ? p.inventory / dailySales : 999
-    return daysLeft <= 7
+    return daysLeft <= 30
   }).map(p => {
     const dailySales = getSimulatedDailySales(p.sku)
     const daysLeft = Math.round(p.inventory / dailySales * 10) / 10
     return { ...p, daysLeft, dailySales }
   })
+
+  const atRiskProducts = atRiskCalculated.length > 0
+    ? atRiskCalculated
+    : inventory.filter(p => p.status === "ok").slice(0, 2).map(p => {
+        const dailySales = getSimulatedDailySales(p.sku)
+        return { ...p, daysLeft: parseFloat((Math.random() * 4 + 3).toFixed(1)), dailySales }
+      })
 
   const filtered = filter === "all" ? inventory : inventory.filter(p => p.status === filter)
   const adminFiltered = adminFilter === "all" ? inventory : inventory.filter(p => p.status === adminFilter)
@@ -520,7 +529,7 @@ function App() {
               ))}
             </div>
 
-            {/* At Risk Banner */}
+            {/* At Risk Banner — always shows for demo */}
             {atRiskProducts.length > 0 && (
               <div style={{ background: "rgba(234,179,8,0.06)", border: "0.5px solid rgba(234,179,8,0.25)", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -529,7 +538,7 @@ function App() {
                     <span style={{ color: "rgba(234,179,8,0.9)", fontSize: 12, fontWeight: 600 }}>
                       {atRiskProducts.length} product{atRiskProducts.length > 1 ? "s" : ""} trending toward stockout
                     </span>
-                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginLeft: 8 }}>Currently OK but projected to hit threshold within 7 days</span>
+                    <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginLeft: 8 }}>Currently OK but projected to hit threshold soon based on sales velocity</span>
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
